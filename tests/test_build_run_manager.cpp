@@ -55,6 +55,52 @@ private slots:
         QCOMPARE(cmds.first, QString("make -j4"));
         QCOMPARE(cmds.second, QString("./bin/app"));
     }
+
+    void testFindCMakeExecutableIgnoresTests() {
+        QTemporaryDir tempDir;
+        QVERIFY(tempDir.isValid());
+
+        QString cmakePath = QDir(tempDir.path()).filePath("CMakeLists.txt");
+        QFile file(cmakePath);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(
+            "cmake_minimum_required(VERSION 3.16)\n"
+            "project(MyCoolApp)\n"
+            "add_executable(mycoolapp_tests test_main.cpp)\n"
+            "add_executable(mycoolapp main.cpp)\n"
+        );
+        file.close();
+
+        QString exec = CinderDE::BuildRunManager::findCMakeExecutable(tempDir.path(), tempDir.path());
+        QVERIFY(exec.endsWith("mycoolapp"));
+        QVERIFY(!exec.endsWith("mycoolapp_tests"));
+    }
+
+    void testExternalTerminalFailureReporting() {
+        CinderDE::BuildRunManager manager;
+        CinderDE::WorkspaceConfig config;
+        config.hasExecutionMode = true;
+        config.executionMode = "external_terminal";
+        config.hasTerminalCommand = true;
+        config.terminalCommand = "nonexistent_terminal_binary_xyz_123";
+
+        QSignalSpy errorSpy(&manager, &CinderDE::BuildRunManager::processError);
+        QSignalSpy outputSpy(&manager, &CinderDE::BuildRunManager::outputReceived);
+
+        manager.run("/tmp/test.py", "", config);
+
+        QCOMPARE(errorSpy.count(), 1);
+        QVERIFY(errorSpy.at(0).at(0).toString().contains("nonexistent_terminal_binary_xyz_123"));
+
+        bool foundInOutput = false;
+        for (const auto &call : outputSpy) {
+            if (call.at(0).toString().contains("ERROR")) {
+                foundInOutput = true;
+                break;
+            }
+        }
+        QVERIFY(foundInOutput);
+    }
 };
 
 QTEST_MAIN(TestBuildRunManager)
