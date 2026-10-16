@@ -43,12 +43,17 @@ private:
     QVector<HighlightingRule> m_cppRules;
     QVector<HighlightingRule> m_pythonRules;
 
+    QVector<HighlightingRule> m_cTypeRules;
+    QVector<HighlightingRule> m_cppTypeRules;
+    QVector<HighlightingRule> m_pythonBuiltinRules;
+
     void setupCRules();
     void setupCppRules();
     void setupPythonRules();
 
     void highlightCLikeBlock(const QString &text);
     void highlightPythonBlock(const QString &text);
+    void applyMaskedRules(const QString &text, const QVector<HighlightingRule> &rules, const QVector<bool> &isMasked);
 };
 
 } // namespace CinderDE

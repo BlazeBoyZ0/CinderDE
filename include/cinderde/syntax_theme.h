@@ -9,12 +9,14 @@ namespace CinderDE {
 
 struct SyntaxTheme {
     QTextCharFormat keywordFormat;
+    QTextCharFormat typeFormat;
     QTextCharFormat stringFormat;
     QTextCharFormat commentFormat;
     QTextCharFormat numberFormat;
     QTextCharFormat operatorFormat;
     QTextCharFormat preprocessorFormat;
     QTextCharFormat decoratorFormat;
+    QTextCharFormat functionFormat;
 
     static SyntaxTheme darkTheme() {
         SyntaxTheme theme;
@@ -22,6 +24,9 @@ struct SyntaxTheme {
         // Keywords (clean vibrant blue)
         theme.keywordFormat.setForeground(QColor("#569cd6"));
         theme.keywordFormat.setFontWeight(QFont::Bold);
+
+        // Types & Builtins (vibrant teal/cyan)
+        theme.typeFormat.setForeground(QColor("#4ec9b0"));
 
         // Strings & Chars (warm terra cotta)
         theme.stringFormat.setForeground(QColor("#ce9178"));
@@ -42,6 +47,9 @@ struct SyntaxTheme {
         // Decorators in Python (ember-orange accent)
         theme.decoratorFormat.setForeground(QColor("#ff6b35"));
         theme.decoratorFormat.setFontItalic(true);
+
+        // Functions & Methods (soft yellow)
+        theme.functionFormat.setForeground(QColor("#dcdcaa"));
 
         return theme;
     }

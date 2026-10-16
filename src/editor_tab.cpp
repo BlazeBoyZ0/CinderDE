@@ -1,4 +1,5 @@
 #include "cinderde/editor_tab.h"
+#include "cinderde/code_completion.h"
 #include "cinderde/preferences.h"
 #include <QPainter>
 #include <QTextBlock>
@@ -26,16 +27,19 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 
 // CodeEditor implementation
 CodeEditor::CodeEditor(QWidget *parent)
-    : QPlainTextEdit(parent)
+    : QPlainTextEdit(parent),
+      m_language(Language::None),
+      m_completionPopup(nullptr)
 {
     m_lineNumberArea = new LineNumberArea(this);
+    m_completionPopup = new CodeCompletionPopup(this);
 
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
-    connect(this, &CodeEditor::cursorPositionChanged, this, &CodeEditor::highlightCurrentLine);
+    connect(this, &CodeEditor::cursorPositionChanged, this, &CodeEditor::highlightCurrentLineAndBracket);
 
     updateLineNumberAreaWidth(0);
-    highlightCurrentLine();
+    highlightCurrentLineAndBracket();
 }
 
 int CodeEditor::lineNumberAreaWidth() const {
@@ -84,7 +88,7 @@ void CodeEditor::resizeEvent(QResizeEvent *event) {
     m_lineNumberArea->setGeometry(QRect(cr.left(), cr.top(), lineNumberAreaWidth(), cr.height()));
 }
 
-void CodeEditor::highlightCurrentLine() {
+void CodeEditor::highlightCurrentLineAndBracket() {
     QList<QTextEdit::ExtraSelection> extraSelections;
 
     if (!isReadOnly()) {
@@ -95,9 +99,416 @@ void CodeEditor::highlightCurrentLine() {
         selection.cursor = textCursor();
         selection.cursor.clearSelection();
         extraSelections.append(selection);
+
+        highlightMatchingBracket(extraSelections);
     }
 
     setExtraSelections(extraSelections);
+}
+
+void CodeEditor::highlightMatchingBracket(QList<QTextEdit::ExtraSelection> &extraSelections) {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) return;
+
+    QString text = document()->toPlainText();
+    int pos = cursor.position();
+    int docLen = text.length();
+
+    if (docLen == 0) return;
+
+    // Check character before and after cursor
+    int matchPos = -1;
+    int targetPos = -1;
+    QChar targetChar;
+
+    auto isBracket = [](QChar c) {
+        return c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}';
+    };
+
+    if (pos > 0 && isBracket(text.at(pos - 1))) {
+        targetPos = pos - 1;
+        targetChar = text.at(targetPos);
+    } else if (pos < docLen && isBracket(text.at(pos))) {
+        targetPos = pos;
+        targetChar = text.at(targetPos);
+    }
+
+    if (targetPos == -1) return;
+
+    QChar openChar, closeChar;
+    bool forward = true;
+
+    if (targetChar == '(') { openChar = '('; closeChar = ')'; forward = true; }
+    else if (targetChar == ')') { openChar = '('; closeChar = ')'; forward = false; }
+    else if (targetChar == '[') { openChar = '['; closeChar = ']'; forward = true; }
+    else if (targetChar == ']') { openChar = '['; closeChar = ']'; forward = false; }
+    else if (targetChar == '{') { openChar = '{'; closeChar = '}'; forward = true; }
+    else if (targetChar == '}') { openChar = '{'; closeChar = '}'; forward = false; }
+
+    int depth = 0;
+    if (forward) {
+        for (int i = targetPos; i < docLen; ++i) {
+            QChar c = text.at(i);
+            if (c == openChar) depth++;
+            else if (c == closeChar) {
+                depth--;
+                if (depth == 0) {
+                    matchPos = i;
+                    break;
+                }
+            }
+        }
+    } else {
+        for (int i = targetPos; i >= 0; --i) {
+            QChar c = text.at(i);
+            if (c == closeChar) depth++;
+            else if (c == openChar) {
+                depth--;
+                if (depth == 0) {
+                    matchPos = i;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (matchPos != -1) {
+        QTextCharFormat fmt;
+        fmt.setBackground(QColor("#3e4b5b"));
+        fmt.setForeground(QColor("#ffffff"));
+        fmt.setFontWeight(QFont::Bold);
+
+        QTextEdit::ExtraSelection sel1;
+        sel1.format = fmt;
+        sel1.cursor = textCursor();
+        sel1.cursor.setPosition(targetPos);
+        sel1.cursor.setPosition(targetPos + 1, QTextCursor::KeepAnchor);
+        extraSelections.append(sel1);
+
+        QTextEdit::ExtraSelection sel2;
+        sel2.format = fmt;
+        sel2.cursor = textCursor();
+        sel2.cursor.setPosition(matchPos);
+        sel2.cursor.setPosition(matchPos + 1, QTextCursor::KeepAnchor);
+        extraSelections.append(sel2);
+    }
+}
+
+void CodeEditor::handleSmartEnter() {
+    QTextCursor cursor = textCursor();
+    QTextBlock block = cursor.block();
+    QString text = block.text();
+
+    int cursorCol = cursor.positionInBlock();
+    QString leftText = text.left(cursorCol);
+    QString rightText = text.mid(cursorCol);
+
+    // Compute leading whitespace of current line
+    QString indent;
+    for (QChar c : leftText) {
+        if (c.isSpace()) indent += c;
+        else break;
+    }
+
+    QString trimmedLeft = leftText.trimmed();
+    bool increaseIndent = false;
+
+    if (m_language == Language::C || m_language == Language::Cpp) {
+        if (trimmedLeft.endsWith('{')) {
+            increaseIndent = true;
+        }
+    } else if (m_language == Language::Python) {
+        if (trimmedLeft.endsWith(':')) {
+            increaseIndent = true;
+        }
+    } else {
+        if (trimmedLeft.endsWith('{') || trimmedLeft.endsWith(':')) {
+            increaseIndent = true;
+        }
+    }
+
+    int tabWidth = 4; // default space indent step if using spaces
+    QString indentStep = "    ";
+
+    cursor.beginEditBlock();
+    cursor.insertBlock();
+
+    if (increaseIndent) {
+        if (trimmedLeft.endsWith('{') && rightText.trimmed().startsWith('}')) {
+            // Block expansion: {\n    cursor\n}
+            cursor.insertText(indent + indentStep);
+            int midPos = cursor.position();
+            cursor.insertBlock();
+            cursor.insertText(indent);
+            cursor.setPosition(midPos);
+            cursor.endEditBlock();
+            setTextCursor(cursor);
+            return;
+        } else {
+            indent += indentStep;
+        }
+    }
+
+    cursor.insertText(indent);
+    cursor.endEditBlock();
+    setTextCursor(cursor);
+}
+
+void CodeEditor::handleSmartBackspace(QKeyEvent *e) {
+    QTextCursor cursor = textCursor();
+    if (cursor.hasSelection()) {
+        QPlainTextEdit::keyPressEvent(e);
+        return;
+    }
+
+    int pos = cursor.position();
+    int posInBlock = cursor.positionInBlock();
+    QString text = cursor.block().text();
+
+    // Check if cursor is inside empty pair like (), [], {}, "", ''
+    if (posInBlock > 0 && posInBlock < text.length()) {
+        QChar left = text.at(posInBlock - 1);
+        QChar right = text.at(posInBlock);
+        if ((left == '(' && right == ')') ||
+            (left == '[' && right == ']') ||
+            (left == '{' && right == '}') ||
+            (left == '"' && right == '"') ||
+            (left == '\'' && right == '\'')) {
+            cursor.beginEditBlock();
+            cursor.deleteChar();
+            cursor.deletePreviousChar();
+            cursor.endEditBlock();
+            return;
+        }
+    }
+
+    // Check leading spaces unindent
+    QString leading = text.left(posInBlock);
+    if (!leading.isEmpty() && leading.trimmed().isEmpty() && leading.contains(' ')) {
+        int spaces = leading.length();
+        int tabWidth = 4;
+        int deleteCount = spaces % tabWidth;
+        if (deleteCount == 0) deleteCount = tabWidth;
+        deleteCount = qMin(deleteCount, spaces);
+
+        cursor.beginEditBlock();
+        for (int i = 0; i < deleteCount; ++i) {
+            cursor.deletePreviousChar();
+        }
+        cursor.endEditBlock();
+        return;
+    }
+
+    QPlainTextEdit::keyPressEvent(e);
+}
+
+bool CodeEditor::handleBracketPairing(QKeyEvent *e) {
+    QString typed = e->text();
+    if (typed.isEmpty()) return false;
+
+    QChar ch = typed.at(0);
+    if (ch != '(' && ch != ')' && ch != '[' && ch != ']' &&
+        ch != '{' && ch != '}' && ch != '"' && ch != '\'') {
+        return false;
+    }
+
+    QTextCursor cursor = textCursor();
+    QString text = document()->toPlainText();
+    int pos = cursor.position();
+
+    // 1. If text selection exists, wrap selection
+    if (cursor.hasSelection()) {
+        QChar openCh = ch;
+        QChar closeCh = ch;
+        if (ch == '(' || ch == ')') { openCh = '('; closeCh = ')'; }
+        else if (ch == '[' || ch == ']') { openCh = '['; closeCh = ']'; }
+        else if (ch == '{' || ch == '}') { openCh = '{'; closeCh = '}'; }
+
+        int selStart = cursor.selectionStart();
+        int selEnd = cursor.selectionEnd();
+        QString selectedText = cursor.selectedText();
+
+        cursor.beginEditBlock();
+        cursor.setPosition(selStart);
+        cursor.insertText(QString(openCh));
+        cursor.setPosition(selStart + 1);
+        cursor.insertText(selectedText);
+        cursor.insertText(QString(closeCh));
+
+        cursor.setPosition(selStart + 1);
+        cursor.setPosition(selEnd + 1, QTextCursor::KeepAnchor);
+        cursor.endEditBlock();
+        setTextCursor(cursor);
+        return true;
+    }
+
+    // 2. Skip over if typing closing character or quote that already exists immediately at cursor
+    if (pos < text.length()) {
+        QChar nextCh = text.at(pos);
+        if (ch == nextCh && (ch == ')' || ch == ']' || ch == '}' || ch == '"' || ch == '\'')) {
+            cursor.movePosition(QTextCursor::Right);
+            setTextCursor(cursor);
+            return true;
+        }
+    }
+
+    // 3. Auto unindent closing brace '}' if alone on line
+    if (ch == '}' && (m_language == Language::C || m_language == Language::Cpp)) {
+        QString lineText = cursor.block().text();
+        int posInBlock = cursor.positionInBlock();
+        QString leftText = lineText.left(posInBlock);
+        if (!leftText.isEmpty() && leftText.trimmed().isEmpty()) {
+            if (leftText.length() >= 4) {
+                cursor.beginEditBlock();
+                for (int i = 0; i < 4; ++i) cursor.deletePreviousChar();
+                cursor.insertText("}");
+                cursor.endEditBlock();
+                return true;
+            }
+        }
+    }
+
+    // 4. Insert opening + closing pair for opening brackets/quotes
+    QChar openCh = ch;
+    QChar closeCh;
+    if (ch == '(') closeCh = ')';
+    else if (ch == '[') closeCh = ']';
+    else if (ch == '{') closeCh = '}';
+    else if (ch == '"' || ch == '\'') closeCh = ch;
+
+    if (!closeCh.isNull()) {
+        // Do not auto-pair quote if previous char is identifier (e.g. don't pair inside don't -> don''t)
+        if ((ch == '"' || ch == '\'') && pos > 0 && text.at(pos - 1).isLetterOrNumber()) {
+            return false;
+        }
+
+        // Do not auto-pair if next char is an identifier char
+        if (pos < text.length() && text.at(pos).isLetterOrNumber()) {
+            return false;
+        }
+
+        cursor.beginEditBlock();
+        cursor.insertText(QString(openCh) + QString(closeCh));
+        cursor.movePosition(QTextCursor::Left);
+        cursor.endEditBlock();
+        setTextCursor(cursor);
+        return true;
+    }
+
+    return false;
+}
+
+void CodeEditor::toggleComment() {
+    QTextCursor cursor = textCursor();
+    int startBlock = document()->findBlock(cursor.selectionStart()).blockNumber();
+    int endBlock = document()->findBlock(cursor.selectionEnd()).blockNumber();
+
+    QString commentPrefix = "// ";
+    if (m_language == Language::Python) {
+        commentPrefix = "# ";
+    }
+
+    // Check if all non-empty lines in selection are already commented
+    bool allCommented = true;
+    for (int i = startBlock; i <= endBlock; ++i) {
+        QTextBlock block = document()->findBlockByNumber(i);
+        QString line = block.text().trimmed();
+        if (!line.isEmpty()) {
+            if (!line.startsWith(commentPrefix.trimmed())) {
+                allCommented = false;
+                break;
+            }
+        }
+    }
+
+    cursor.beginEditBlock();
+    for (int i = startBlock; i <= endBlock; ++i) {
+        QTextBlock block = document()->findBlockByNumber(i);
+        QString text = block.text();
+
+        if (allCommented) {
+            int prefixIdx = text.indexOf(commentPrefix.trimmed());
+            if (prefixIdx != -1) {
+                QTextCursor lineCursor(block);
+                lineCursor.setPosition(block.position() + prefixIdx);
+                int removeLen = commentPrefix.trimmed().length();
+                if (prefixIdx + removeLen < text.length() && text.at(prefixIdx + removeLen) == ' ') {
+                    removeLen++;
+                }
+                lineCursor.setPosition(block.position() + prefixIdx + removeLen, QTextCursor::KeepAnchor);
+                lineCursor.removeSelectedText();
+            }
+        } else {
+            // Find leading indent level
+            int firstNonSpace = 0;
+            while (firstNonSpace < text.length() && text.at(firstNonSpace).isSpace()) {
+                firstNonSpace++;
+            }
+            QTextCursor lineCursor(block);
+            lineCursor.setPosition(block.position() + firstNonSpace);
+            lineCursor.insertText(commentPrefix);
+        }
+    }
+    cursor.endEditBlock();
+}
+
+void CodeEditor::keyPressEvent(QKeyEvent *e) {
+    // Manual trigger Ctrl+Space for completion
+    if ((e->modifiers() & Qt::ControlModifier) && e->key() == Qt::Key_Space) {
+        QTextCursor cursor = textCursor();
+        QString line = cursor.block().text().left(cursor.positionInBlock());
+        static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
+        auto match = wordRx.match(line);
+        QString prefix = match.hasMatch() ? match.captured(0) : "";
+        if (m_completionPopup) {
+            m_completionPopup->updateSuggestions(prefix, m_language);
+        }
+        return;
+    }
+
+    if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        handleSmartEnter();
+        if (m_completionPopup) m_completionPopup->hide();
+        return;
+    }
+
+    if (e->key() == Qt::Key_Backspace) {
+        handleSmartBackspace(e);
+        if (m_completionPopup) {
+            QTextCursor cursor = textCursor();
+            QString line = cursor.block().text().left(cursor.positionInBlock());
+            static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
+            auto match = wordRx.match(line);
+            QString prefix = match.hasMatch() ? match.captured(0) : "";
+            m_completionPopup->updateSuggestions(prefix, m_language);
+        }
+        return;
+    }
+
+    if (e->modifiers() == Qt::NoModifier || e->modifiers() == Qt::ShiftModifier) {
+        if (handleBracketPairing(e)) {
+            if (m_completionPopup) m_completionPopup->hide();
+            return;
+        }
+    }
+
+    QPlainTextEdit::keyPressEvent(e);
+
+    // Update completion popup after standard typing if alphanumeric or underscore typed
+    if (m_completionPopup && !e->text().isEmpty() && (e->text().at(0).isLetterOrNumber() || e->text().at(0) == '_')) {
+        QTextCursor cursor = textCursor();
+        QString line = cursor.block().text().left(cursor.positionInBlock());
+        static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
+        auto match = wordRx.match(line);
+        if (match.hasMatch()) {
+            QString prefix = match.captured(0);
+            m_completionPopup->updateSuggestions(prefix, m_language);
+        } else {
+            m_completionPopup->hide();
+        }
+    } else if (m_completionPopup && e->key() != Qt::Key_Up && e->key() != Qt::Key_Down) {
+        m_completionPopup->hide();
+    }
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
@@ -163,9 +574,13 @@ EditorTab::EditorTab(QWidget *parent)
 }
 
 void EditorTab::updateHighlighterLanguage() {
-    if (!m_highlighter) return;
     Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
-    m_highlighter->setLanguage(lang);
+    if (m_highlighter) {
+        m_highlighter->setLanguage(lang);
+    }
+    if (m_editor) {
+        m_editor->setLanguage(lang);
+    }
 }
 
 void EditorTab::createFindReplaceBar() {

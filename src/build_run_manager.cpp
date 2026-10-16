@@ -399,12 +399,10 @@ bool BuildRunManager::launchExternalTerminal(const QString &command, const QStri
 
     QStringList args = userArgs;
 
-    if (baseTerm == "gnome-terminal" || baseTerm == "mate-terminal") {
+    if (baseTerm == "gnome-terminal" || baseTerm == "mate-terminal" || baseTerm == "xfce4-terminal") {
         args << "--working-directory=" + workingDir << "--" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "konsole") {
         args << "--workdir" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
-    } else if (baseTerm == "xfce4-terminal") {
-        args << "--working-directory=" + workingDir << "-x" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "alacritty") {
         args << "--working-directory" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "kitty") {

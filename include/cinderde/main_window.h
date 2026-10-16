@@ -43,6 +43,7 @@ private slots:
     void copy();
     void paste();
     void selectAll();
+    void toggleComment();
     void showFind();
     void showReplace();
 
