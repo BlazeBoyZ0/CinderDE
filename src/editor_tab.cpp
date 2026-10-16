@@ -133,6 +133,7 @@ EditorTab::EditorTab(QWidget *parent)
     : QWidget(parent), m_fontSize(11), m_replaceMode(false)
 {
     m_editor = new CodeEditor(this);
+    m_highlighter = new SyntaxHighlighter(m_editor->document());
 
     // Default font
     QFont font("Monospace");
@@ -152,6 +153,13 @@ EditorTab::EditorTab(QWidget *parent)
     connect(m_editor, &QPlainTextEdit::cursorPositionChanged, this, &EditorTab::onCursorPositionChanged);
 
     m_typeInfo = FileTypeDetector::detectType("");
+    updateHighlighterLanguage();
+}
+
+void EditorTab::updateHighlighterLanguage() {
+    if (!m_highlighter) return;
+    Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
+    m_highlighter->setLanguage(lang);
 }
 
 void EditorTab::createFindReplaceBar() {
@@ -325,20 +333,26 @@ void EditorTab::replaceAll() {
     updateMatchCount();
 }
 
-bool EditorTab::openFile(const QString &filePath) {
+bool EditorTab::openFile(const QString &filePath, bool showDialog) {
     if (FileTypeDetector::isLikelyBinary(filePath)) {
-        QMessageBox::StandardButton res = QMessageBox::warning(
-            this, "Binary File Warning",
-            QString("The file '%1' appears to be a binary file. Opening binary files may display invalid text.\n\nDo you still want to open it?").arg(QFileInfo(filePath).fileName()),
-            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-        if (res != QMessageBox::Yes) {
+        if (showDialog) {
+            QMessageBox::StandardButton res = QMessageBox::warning(
+                this, "Binary File Warning",
+                QString("The file '%1' appears to be a binary file. Opening binary files may display invalid text.\n\nDo you still want to open it?").arg(QFileInfo(filePath).fileName()),
+                QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+            if (res != QMessageBox::Yes) {
+                return false;
+            }
+        } else {
             return false;
         }
     }
 
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error Opening File", QString("Failed to open file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Opening File", QString("Failed to open file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        }
         return false;
     }
 
@@ -349,6 +363,7 @@ bool EditorTab::openFile(const QString &filePath) {
     m_filePath = filePath;
     m_editor->document()->setModified(false);
     m_typeInfo = FileTypeDetector::detectType(filePath);
+    updateHighlighterLanguage();
 
     emit fileTypeChanged(m_typeInfo);
     emit modificationChanged(false);
@@ -360,23 +375,28 @@ bool EditorTab::openFile(const QString &filePath) {
 void EditorTab::setFilePath(const QString &filePath) {
     m_filePath = filePath;
     m_typeInfo = FileTypeDetector::detectType(filePath);
+    updateHighlighterLanguage();
     emit fileTypeChanged(m_typeInfo);
 }
 
 void EditorTab::clearFilePathAndMarkModified() {
     m_filePath.clear();
+    m_typeInfo = FileTypeDetector::detectType("");
+    updateHighlighterLanguage();
     m_editor->document()->setModified(true);
     emit modificationChanged(true);
 }
 
-bool EditorTab::save() {
+bool EditorTab::save(bool showDialog) {
     if (isUntitled()) {
         return false; // Requires saveAs
     }
 
     QFile file(m_filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        }
         return false;
     }
 
@@ -385,7 +405,9 @@ bool EditorTab::save() {
     out.flush();
 
     if (file.error() != QFileDevice::NoError) {
-        QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        }
         file.close();
         return false;
     }
@@ -398,12 +420,14 @@ bool EditorTab::save() {
     return true;
 }
 
-bool EditorTab::saveAs(const QString &filePath) {
+bool EditorTab::saveAs(const QString &filePath, bool showDialog) {
     if (filePath.isEmpty()) return false;
 
     QFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        }
         return false;
     }
 
@@ -412,7 +436,9 @@ bool EditorTab::saveAs(const QString &filePath) {
     out.flush();
 
     if (file.error() != QFileDevice::NoError) {
-        QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        }
         file.close();
         return false;
     }
@@ -421,6 +447,7 @@ bool EditorTab::saveAs(const QString &filePath) {
 
     m_filePath = filePath;
     m_typeInfo = FileTypeDetector::detectType(filePath);
+    updateHighlighterLanguage();
     m_editor->document()->setModified(false);
 
     emit fileTypeChanged(m_typeInfo);

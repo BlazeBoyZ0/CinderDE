@@ -12,6 +12,7 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include "cinderde/file_type_detector.h"
+#include "cinderde/syntax_highlighter.h"
 
 namespace CinderDE {
 
@@ -57,9 +58,9 @@ class EditorTab : public QWidget {
 public:
     explicit EditorTab(QWidget *parent = nullptr);
 
-    bool openFile(const QString &filePath);
-    bool save();
-    bool saveAs(const QString &filePath);
+    bool openFile(const QString &filePath, bool showDialog = true);
+    bool save(bool showDialog = true);
+    bool saveAs(const QString &filePath, bool showDialog = true);
 
     void setFilePath(const QString &filePath);
     void clearFilePathAndMarkModified();
@@ -71,6 +72,8 @@ public:
     FileTypeInfo fileTypeInfo() const { return m_typeInfo; }
 
     CodeEditor* editor() const { return m_editor; }
+    SyntaxHighlighter* highlighter() const { return m_highlighter; }
+    void updateHighlighterLanguage();
 
     void setFontSize(int size);
     int fontSize() const { return m_fontSize; }
@@ -99,6 +102,7 @@ private slots:
 
 private:
     CodeEditor *m_editor;
+    SyntaxHighlighter *m_highlighter;
     QString m_filePath;
     FileTypeInfo m_typeInfo;
     int m_fontSize;

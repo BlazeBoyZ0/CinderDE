@@ -166,6 +166,7 @@ void MainWindow::setupMenus() {
 
 void MainWindow::setupToolbar() {
     QToolBar *toolbar = addToolBar("Main Toolbar");
+    toolbar->setObjectName("main_toolbar");
     toolbar->setMovable(false);
     toolbar->setIconSize(QSize(18, 18));
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -223,15 +224,16 @@ void MainWindow::applyTheme() {
         QToolBar {
             background-color: #2d2d2d;
             border-bottom: 1px solid #333333;
-            spacing: 4px;
-            padding: 2px;
+            spacing: 2px;
+            padding: 1px;
         }
         QToolButton {
             background-color: #3c3c3c;
             color: #cccccc;
             border: 1px solid #454545;
             border-radius: 3px;
-            padding: 3px 8px;
+            padding: 2px 6px;
+            margin: 1px;
         }
         QToolButton:hover {
             background-color: #4f4f4f;
@@ -248,7 +250,7 @@ void MainWindow::applyTheme() {
         QTabBar::tab {
             background-color: #2d2d2d;
             color: #969696;
-            padding: 6px 14px;
+            padding: 5px 12px;
             border-right: 1px solid #252526;
             border-top: 2px solid transparent;
         }
@@ -262,9 +264,14 @@ void MainWindow::applyTheme() {
             color: #e0e0e0;
         }
         QTabBar::close-button {
-            image: none;
             subcontrol-origin: padding;
             subcontrol-position: right;
+            border-radius: 3px;
+            padding: 2px;
+            margin: 2px;
+        }
+        QTabBar::close-button:hover {
+            background-color: #ff6b35;
         }
         QStatusBar {
             background-color: #252526;
@@ -588,7 +595,7 @@ void MainWindow::resetFontSize() {
 void MainWindow::about() {
     QMessageBox::about(
         this, "About CinderDE",
-        "<h3>CinderDE v0.1</h3>"
+        "<h3>CinderDE v0.2</h3>"
         "<p>A lightweight desktop code editor built with Qt 6 for Linux.</p>"
         "<p>Designed for responsive editing on low-end hardware with dark charcoal theme & ember-orange accents.</p>");
 }
