@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(CinderDE VERSION 0.2.0 LANGUAGES CXX)
+project(CinderDE VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -91,3 +91,18 @@ target_link_libraries(syntax_highlighter_tests PRIVATE
 )
 
 add_test(NAME SyntaxHighlighterTest COMMAND syntax_highlighter_tests -platform offscreen)
+
+add_executable(file_explorer_tests
+    tests/test_file_explorer.cpp
+    src/file_explorer.cpp
+    include/cinderde/file_explorer.h
+)
+
+target_link_libraries(file_explorer_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME FileExplorerTest COMMAND file_explorer_tests -platform offscreen)

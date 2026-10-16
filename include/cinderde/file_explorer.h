@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QMenu>
+#include <QStackedWidget>
 
 namespace CinderDE {
 
@@ -19,6 +20,8 @@ public:
     explicit FileExplorer(QWidget *parent = nullptr);
 
     void setWorkspacePath(const QString &path);
+    void clearWorkspace();
+    void refresh();
     QString workspacePath() const { return m_workspacePath; }
 
 signals:
@@ -26,9 +29,10 @@ signals:
     void workspaceChanged(const QString &path);
     void fileRenamed(const QString &oldPath, const QString &newPath);
     void fileDeleted(const QString &path);
+    void openFolderRequested();
 
 private slots:
-    void onItemDoubleClicked(const QModelIndex &index);
+    void onItemClicked(const QModelIndex &index);
     void showContextMenu(const QPoint &pos);
     void createNewFile();
     void createNewFolder();
@@ -36,11 +40,17 @@ private slots:
     void deleteSelected();
 
 private:
+    QStackedWidget *m_stackedWidget;
+    QWidget *m_welcomeWidget;
+    QWidget *m_treeContainer;
+
     QFileSystemModel *m_model;
     QTreeView *m_treeView;
     QLabel *m_titleLabel;
     QString m_workspacePath;
 
+    void setupWelcomeWidget();
+    void setupTreeWidget();
     QModelIndex selectedIndex() const;
     QString selectedFilePath() const;
 };

@@ -4,16 +4,94 @@
 #include <QMessageBox>
 #include <QInputDialog>
 #include <QHeaderView>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
 
 namespace CinderDE {
 
 FileExplorer::FileExplorer(QWidget *parent)
-    : QWidget(parent)
+    : QWidget(parent),
+      m_workspacePath("")
 {
+    m_stackedWidget = new QStackedWidget(this);
+
     m_model = new QFileSystemModel(this);
     m_model->setFilter(QDir::AllEntries | QDir::NoDotAndDotDot | QDir::Hidden);
 
-    m_treeView = new QTreeView(this);
+    setupWelcomeWidget();
+    setupTreeWidget();
+
+    m_stackedWidget->addWidget(m_welcomeWidget);
+    m_stackedWidget->addWidget(m_treeContainer);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(m_stackedWidget);
+
+    setStyleSheet(
+        "QTreeView { background-color: #252526; color: #cccccc; border: none; }"
+        "QTreeView::item:hover { background-color: #2a2d2e; }"
+        "QTreeView::item:selected { background-color: #37373d; color: #ffffff; }"
+    );
+
+    clearWorkspace();
+}
+
+void FileExplorer::setupWelcomeWidget() {
+    m_welcomeWidget = new QWidget(this);
+    m_welcomeWidget->setStyleSheet("background-color: #252526; color: #cccccc;");
+
+    QVBoxLayout *layout = new QVBoxLayout(m_welcomeWidget);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(8);
+
+    QLabel *header = new QLabel("EXPLORER", m_welcomeWidget);
+    header->setStyleSheet("font-weight: bold; color: #aaaaaa; text-transform: uppercase; font-size: 11px;");
+
+    QLabel *msgTitle = new QLabel("NO FOLDER OPEN", m_welcomeWidget);
+    msgTitle->setStyleSheet("font-weight: bold; font-size: 13px; color: #e0e0e0; margin-top: 20px;");
+    msgTitle->setAlignment(Qt::AlignCenter);
+
+    QLabel *msgSub = new QLabel("You have not yet opened a folder as a workspace.", m_welcomeWidget);
+    msgSub->setWordWrap(true);
+    msgSub->setAlignment(Qt::AlignCenter);
+    msgSub->setStyleSheet("color: #888888; font-size: 11px;");
+
+    QPushButton *openBtn = new QPushButton("Open Folder", m_welcomeWidget);
+    openBtn->setCursor(Qt::PointingHandCursor);
+    openBtn->setStyleSheet(
+        "QPushButton {"
+        "  background-color: #3c3c3c;"
+        "  color: #ffffff;"
+        "  border: 1px solid #ff6b35;"
+        "  border-radius: 3px;"
+        "  padding: 6px 12px;"
+        "  font-weight: bold;"
+        "  margin-top: 10px;"
+        "}"
+        "QPushButton:hover {"
+        "  background-color: #ff6b35;"
+        "}"
+        "QPushButton:pressed {"
+        "  background-color: #e05a2b;"
+        "}"
+    );
+
+    connect(openBtn, &QPushButton::clicked, this, &FileExplorer::openFolderRequested);
+
+    layout->addWidget(header);
+    layout->addStretch();
+    layout->addWidget(msgTitle);
+    layout->addWidget(msgSub);
+    layout->addWidget(openBtn, 0, Qt::AlignCenter);
+    layout->addStretch();
+}
+
+void FileExplorer::setupTreeWidget() {
+    m_treeContainer = new QWidget(this);
+
+    m_treeView = new QTreeView(m_treeContainer);
     m_treeView->setModel(m_model);
     m_treeView->setContextMenuPolicy(Qt::CustomContextMenu);
     m_treeView->setAnimated(true);
@@ -21,44 +99,72 @@ FileExplorer::FileExplorer(QWidget *parent)
     m_treeView->setSortingEnabled(true);
     m_treeView->sortByColumn(0, Qt::AscendingOrder);
 
-    // Hide extra columns like size, type, date modified by default for clean look
     m_treeView->hideColumn(1);
     m_treeView->hideColumn(2);
     m_treeView->hideColumn(3);
     m_treeView->header()->hide();
 
-    m_titleLabel = new QLabel("EXPLORER", this);
+    m_titleLabel = new QLabel("WORKSPACE", m_treeContainer);
     m_titleLabel->setStyleSheet("font-weight: bold; color: #aaaaaa; padding: 4px; text-transform: uppercase; font-size: 11px;");
 
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
-    mainLayout->setContentsMargins(2, 4, 2, 2);
-    mainLayout->setSpacing(4);
-    mainLayout->addWidget(m_titleLabel);
-    mainLayout->addWidget(m_treeView);
+    QVBoxLayout *treeLayout = new QVBoxLayout(m_treeContainer);
+    treeLayout->setContentsMargins(2, 4, 2, 2);
+    treeLayout->setSpacing(4);
+    treeLayout->addWidget(m_titleLabel);
+    treeLayout->addWidget(m_treeView);
 
-    connect(m_treeView, &QTreeView::doubleClicked, this, &FileExplorer::onItemDoubleClicked);
+    connect(m_treeView, &QTreeView::clicked, this, &FileExplorer::onItemClicked);
+    connect(m_treeView, &QTreeView::doubleClicked, this, &FileExplorer::onItemClicked);
     connect(m_treeView, &QTreeView::customContextMenuRequested, this, &FileExplorer::showContextMenu);
-
-    setStyleSheet(
-        "QTreeView { background-color: #252526; color: #cccccc; border: none; }"
-        "QTreeView::item:hover { background-color: #2a2d2e; }"
-        "QTreeView::item:selected { background-color: #37373d; color: #ffffff; }"
-    );
 }
 
 void FileExplorer::setWorkspacePath(const QString &path) {
-    if (path.isEmpty() || !QDir(path).exists()) return;
+    if (path.isEmpty()) {
+        clearWorkspace();
+        return;
+    }
 
-    m_workspacePath = path;
-    QModelIndex rootIndex = m_model->setRootPath(path);
+    QDir dir(path);
+    if (!dir.exists()) {
+        clearWorkspace();
+        return;
+    }
+
+    m_workspacePath = dir.canonicalPath();
+    if (m_workspacePath.isEmpty()) {
+        m_workspacePath = dir.absolutePath();
+    }
+
+    QModelIndex rootIndex = m_model->setRootPath(m_workspacePath);
     m_treeView->setRootIndex(rootIndex);
 
-    QFileInfo info(path);
-    m_titleLabel->setText(QString("EXPLORER: %1").arg(info.fileName().toUpper()));
-    emit workspaceChanged(path);
+    QFileInfo info(m_workspacePath);
+    QString folderName = info.fileName();
+    if (folderName.isEmpty()) {
+        folderName = m_workspacePath;
+    }
+    m_titleLabel->setText(QString("WORKSPACE: %1").arg(folderName.toUpper()));
+
+    m_stackedWidget->setCurrentWidget(m_treeContainer);
+    emit workspaceChanged(m_workspacePath);
 }
 
-void FileExplorer::onItemDoubleClicked(const QModelIndex &index) {
+void FileExplorer::clearWorkspace() {
+    m_workspacePath.clear();
+    m_model->setRootPath("");
+    m_treeView->setRootIndex(QModelIndex());
+    m_stackedWidget->setCurrentWidget(m_welcomeWidget);
+    emit workspaceChanged("");
+}
+
+void FileExplorer::refresh() {
+    if (!m_workspacePath.isEmpty() && QDir(m_workspacePath).exists()) {
+        QModelIndex rootIndex = m_model->setRootPath(m_workspacePath);
+        m_treeView->setRootIndex(rootIndex);
+    }
+}
+
+void FileExplorer::onItemClicked(const QModelIndex &index) {
     if (!index.isValid()) return;
 
     QString filePath = m_model->filePath(index);
@@ -97,10 +203,15 @@ void FileExplorer::showContextMenu(const QPoint &pos) {
         menu.addAction("Delete", this, &FileExplorer::deleteSelected);
     }
 
+    menu.addSeparator();
+    menu.addAction("Refresh Explorer", this, &FileExplorer::refresh);
+
     menu.exec(m_treeView->viewport()->mapToGlobal(pos));
 }
 
 void FileExplorer::createNewFile() {
+    if (m_workspacePath.isEmpty()) return;
+
     QString dirPath = selectedFilePath();
     QFileInfo info(dirPath);
     if (info.isFile()) {
@@ -108,7 +219,6 @@ void FileExplorer::createNewFile() {
     }
 
     if (dirPath.isEmpty()) dirPath = m_workspacePath;
-    if (dirPath.isEmpty()) return;
 
     bool ok;
     QString fileName = QInputDialog::getText(this, "New File", "File name:", QLineEdit::Normal, "", &ok);
@@ -121,6 +231,7 @@ void FileExplorer::createNewFile() {
         QFile file(fullPath);
         if (file.open(QIODevice::WriteOnly)) {
             file.close();
+            refresh();
             emit fileSelected(fullPath);
         } else {
             QMessageBox::critical(this, "Error", QString("Failed to create file:\n%1").arg(file.errorString()));
@@ -129,6 +240,8 @@ void FileExplorer::createNewFile() {
 }
 
 void FileExplorer::createNewFolder() {
+    if (m_workspacePath.isEmpty()) return;
+
     QString dirPath = selectedFilePath();
     QFileInfo info(dirPath);
     if (info.isFile()) {
@@ -136,13 +249,14 @@ void FileExplorer::createNewFolder() {
     }
 
     if (dirPath.isEmpty()) dirPath = m_workspacePath;
-    if (dirPath.isEmpty()) return;
 
     bool ok;
     QString folderName = QInputDialog::getText(this, "New Folder", "Folder name:", QLineEdit::Normal, "", &ok);
     if (ok && !folderName.trimmed().isEmpty()) {
         QDir dir(dirPath);
-        if (!dir.mkdir(folderName.trimmed())) {
+        if (dir.mkdir(folderName.trimmed())) {
+            refresh();
+        } else {
             QMessageBox::critical(this, "Error", "Failed to create directory.");
         }
     }
@@ -160,6 +274,7 @@ void FileExplorer::renameSelected() {
     if (ok && !newName.trimmed().isEmpty() && newName != info.fileName()) {
         QString newPath = QDir(info.absolutePath()).filePath(newName.trimmed());
         if (QFile::rename(currentPath, newPath)) {
+            refresh();
             emit fileRenamed(currentPath, newPath);
         } else {
             QMessageBox::critical(this, "Error", "Failed to rename file/directory.");
@@ -188,6 +303,7 @@ void FileExplorer::deleteSelected() {
         }
 
         if (success) {
+            refresh();
             emit fileDeleted(path);
         } else {
             QMessageBox::critical(this, "Error", "Failed to delete file/directory.");
