@@ -30,6 +30,10 @@ signals:
     void fileRenamed(const QString &oldPath, const QString &newPath);
     void fileDeleted(const QString &path);
     void openFolderRequested();
+    void openWorkspaceRequested(const QString &path);
+
+public slots:
+    void updateRecentWorkspacesUI();
 
 private slots:
     void onItemClicked(const QModelIndex &index);
@@ -43,6 +47,7 @@ private:
     QStackedWidget *m_stackedWidget;
     QWidget *m_welcomeWidget;
     QWidget *m_treeContainer;
+    QVBoxLayout *m_recentContainerLayout;
 
     QFileSystemModel *m_model;
     QTreeView *m_treeView;

@@ -39,6 +39,7 @@ public:
     void lineNumberAreaPaintEvent(QPaintEvent *event);
     int lineNumberAreaWidth() const;
     void setEditorFontSize(int size);
+    void setEditorTabSize(int size);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -81,6 +82,9 @@ public:
     void zoomOut(int range = 1);
     void resetFontSize();
 
+    void setTabSize(int size);
+    int tabSize() const { return m_tabSize; }
+
     void setWordWrap(bool wrap);
     bool wordWrap() const;
 
@@ -106,6 +110,7 @@ private:
     QString m_filePath;
     FileTypeInfo m_typeInfo;
     int m_fontSize;
+    int m_tabSize;
 
     // Find and Replace Bar
     QWidget *m_findReplaceWidget;

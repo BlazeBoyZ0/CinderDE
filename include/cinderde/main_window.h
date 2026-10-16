@@ -7,8 +7,10 @@
 #include <QLabel>
 #include <QToolBar>
 #include <QAction>
+#include <QMenu>
 #include "cinderde/editor_tab.h"
 #include "cinderde/file_explorer.h"
+#include "cinderde/workspace_config.h"
 
 namespace CinderDE {
 
@@ -45,6 +47,7 @@ private slots:
     // View actions
     void toggleExplorer();
     void toggleWordWrap();
+    void toggleSessionRestore(bool checked);
     void increaseFontSize();
     void decreaseFontSize();
     void resetFontSize();
@@ -70,6 +73,10 @@ private:
     // View action references for checking state
     QAction *m_toggleExplorerAction;
     QAction *m_wordWrapAction;
+    QAction *m_sessionRestoreAction;
+    QMenu *m_recentWorkspacesMenu;
+
+    WorkspaceConfig m_activeWorkspaceConfig;
 
     void setupUi();
     void setupMenus();
@@ -78,10 +85,17 @@ private:
     void applyTheme();
     void loadSettings();
     void saveSettings();
+    void restoreSession();
+    void saveSessionState();
+
+    void openWorkspaceFolder(const QString &dirPath);
+    void updateRecentWorkspacesMenu();
+    void applyWorkspaceSettings();
 
     EditorTab* currentTab() const;
     EditorTab* tabAt(int index) const;
     bool promptSaveIfModified(EditorTab *tab);
+    bool promptSaveAllIfModified();
     EditorTab* createNewTab(const QString &filePath = QString());
     EditorTab* findTabByPath(const QString &filePath) const;
 };

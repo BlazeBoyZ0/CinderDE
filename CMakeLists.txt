@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(CinderDE VERSION 0.3.0 LANGUAGES CXX)
+project(CinderDE VERSION 0.4.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,6 +20,7 @@ set(SOURCES
     src/file_type_detector.cpp
     src/preferences.cpp
     src/syntax_highlighter.cpp
+    src/workspace_config.cpp
 )
 
 set(HEADERS
@@ -30,6 +31,7 @@ set(HEADERS
     include/cinderde/preferences.h
     include/cinderde/syntax_theme.h
     include/cinderde/syntax_highlighter.h
+    include/cinderde/workspace_config.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
@@ -95,6 +97,7 @@ add_test(NAME SyntaxHighlighterTest COMMAND syntax_highlighter_tests -platform o
 add_executable(file_explorer_tests
     tests/test_file_explorer.cpp
     src/file_explorer.cpp
+    src/preferences.cpp
     include/cinderde/file_explorer.h
 )
 
@@ -106,3 +109,25 @@ target_link_libraries(file_explorer_tests PRIVATE
 )
 
 add_test(NAME FileExplorerTest COMMAND file_explorer_tests -platform offscreen)
+
+add_executable(workspace_session_tests
+    tests/test_workspace_session.cpp
+    src/preferences.cpp
+    src/workspace_config.cpp
+    src/editor_tab.cpp
+    src/file_type_detector.cpp
+    src/syntax_highlighter.cpp
+    include/cinderde/preferences.h
+    include/cinderde/workspace_config.h
+    include/cinderde/editor_tab.h
+    include/cinderde/syntax_highlighter.h
+)
+
+target_link_libraries(workspace_session_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME WorkspaceSessionTest COMMAND workspace_session_tests -platform offscreen)

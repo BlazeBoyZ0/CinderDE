@@ -1,4 +1,6 @@
 #include "cinderde/preferences.h"
+#include <QDir>
+#include <QVariant>
 
 namespace CinderDE {
 
@@ -12,6 +14,15 @@ Preferences& Preferences::instance() {
     return inst;
 }
 
+static QString canonicalizePath(const QString &p) {
+    QDir d(p);
+    if (d.exists()) {
+        QString canon = d.canonicalPath();
+        if (!canon.isEmpty()) return canon;
+    }
+    return QDir::cleanPath(p);
+}
+
 int Preferences::fontSize() const {
     return m_settings.value("editor/fontSize", DEFAULT_FONT_SIZE).toInt();
 }
@@ -20,6 +31,16 @@ void Preferences::setFontSize(int size) {
     if (size < 6) size = 6;
     if (size > 72) size = 72;
     m_settings.setValue("editor/fontSize", size);
+}
+
+int Preferences::tabSize() const {
+    return m_settings.value("editor/tabSize", DEFAULT_TAB_SIZE).toInt();
+}
+
+void Preferences::setTabSize(int size) {
+    if (size < 1) size = 1;
+    if (size > 16) size = 16;
+    m_settings.setValue("editor/tabSize", size);
 }
 
 bool Preferences::wordWrap() const {
@@ -44,6 +65,106 @@ QString Preferences::lastWorkspace() const {
 
 void Preferences::setLastWorkspace(const QString &path) {
     m_settings.setValue("workspace/lastPath", path);
+}
+
+QStringList Preferences::recentWorkspaces() const {
+    return m_settings.value("workspace/recentList").toStringList();
+}
+
+void Preferences::addRecentWorkspace(const QString &path) {
+    if (path.isEmpty()) return;
+    QDir dir(path);
+    if (!dir.exists()) return;
+
+    QString target = canonicalizePath(path);
+    QStringList current = recentWorkspaces();
+    QStringList updated;
+
+    for (const QString &item : current) {
+        if (canonicalizePath(item) != target) {
+            updated.append(item);
+        }
+    }
+
+    updated.prepend(target);
+    while (updated.size() > MAX_RECENT_WORKSPACES) {
+        updated.removeLast();
+    }
+
+    m_settings.setValue("workspace/recentList", updated);
+}
+
+void Preferences::removeRecentWorkspace(const QString &path) {
+    if (path.isEmpty()) return;
+    QString target = canonicalizePath(path);
+    QStringList current = recentWorkspaces();
+    QStringList updated;
+
+    for (const QString &item : current) {
+        if (canonicalizePath(item) != target) {
+            updated.append(item);
+        }
+    }
+
+    m_settings.setValue("workspace/recentList", updated);
+}
+
+void Preferences::clearRecentWorkspaces() {
+    m_settings.remove("workspace/recentList");
+}
+
+bool Preferences::sessionRestoreEnabled() const {
+    return m_settings.value("session/restoreEnabled", true).toBool();
+}
+
+void Preferences::setSessionRestoreEnabled(bool enable) {
+    m_settings.setValue("session/restoreEnabled", enable);
+}
+
+QString Preferences::sessionWorkspace() const {
+    return m_settings.value("session/workspace", "").toString();
+}
+
+void Preferences::setSessionWorkspace(const QString &path) {
+    m_settings.setValue("session/workspace", path);
+}
+
+QStringList Preferences::sessionOpenTabs() const {
+    return m_settings.value("session/openTabs").toStringList();
+}
+
+void Preferences::setSessionOpenTabs(const QStringList &tabs) {
+    m_settings.setValue("session/openTabs", tabs);
+}
+
+int Preferences::sessionActiveTab() const {
+    return m_settings.value("session/activeTab", 0).toInt();
+}
+
+void Preferences::setSessionActiveTab(int index) {
+    m_settings.setValue("session/activeTab", index);
+}
+
+QList<QPair<int, int>> Preferences::sessionCursorPositions() const {
+    QList<QPair<int, int>> result;
+    QVariantList list = m_settings.value("session/cursorPositions").toList();
+    for (const QVariant &var : list) {
+        QVariantList pair = var.toList();
+        if (pair.size() >= 2) {
+            result.append({pair[0].toInt(), pair[1].toInt()});
+        }
+    }
+    return result;
+}
+
+void Preferences::setSessionCursorPositions(const QList<QPair<int, int>> &positions) {
+    QVariantList list;
+    for (const auto &pos : positions) {
+        QVariantList pair;
+        pair << pos.first << pos.second;
+        list.append(QVariant(pair));
+    }
+    m_settings.setValue("session/cursorPositions", list);
 }
 
 QByteArray Preferences::windowGeometry() const {

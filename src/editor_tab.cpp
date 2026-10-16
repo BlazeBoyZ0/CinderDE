@@ -56,6 +56,11 @@ void CodeEditor::setEditorFontSize(int size) {
     updateLineNumberAreaWidth(0);
 }
 
+void CodeEditor::setEditorTabSize(int size) {
+    if (size < 1) size = 1;
+    setTabStopDistance(fontMetrics().horizontalAdvance(' ') * size);
+}
+
 void CodeEditor::updateLineNumberAreaWidth(int /* newBlockCount */) {
     setViewportMargins(lineNumberAreaWidth(), 0, 0, 0);
 }
@@ -130,7 +135,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
 
 // EditorTab implementation
 EditorTab::EditorTab(QWidget *parent)
-    : QWidget(parent), m_fontSize(11), m_replaceMode(false)
+    : QWidget(parent), m_fontSize(11), m_tabSize(4), m_replaceMode(false)
 {
     m_editor = new CodeEditor(this);
     m_highlighter = new SyntaxHighlighter(m_editor->document());
@@ -140,6 +145,7 @@ EditorTab::EditorTab(QWidget *parent)
     font.setStyleHint(QFont::Monospace);
     font.setPointSize(m_fontSize);
     m_editor->setFont(font);
+    m_editor->setEditorTabSize(m_tabSize);
 
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(0, 0, 0, 0);
@@ -472,6 +478,14 @@ void EditorTab::setFontSize(int size) {
     if (size > 72) size = 72;
     m_fontSize = size;
     m_editor->setEditorFontSize(size);
+    m_editor->setEditorTabSize(m_tabSize);
+}
+
+void EditorTab::setTabSize(int size) {
+    if (size < 1) size = 1;
+    if (size > 16) size = 16;
+    m_tabSize = size;
+    m_editor->setEditorTabSize(size);
 }
 
 void EditorTab::zoomIn(int range) {
