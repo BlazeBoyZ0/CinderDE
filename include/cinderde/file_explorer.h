@@ -24,6 +24,8 @@ public:
 signals:
     void fileSelected(const QString &filePath);
     void workspaceChanged(const QString &path);
+    void fileRenamed(const QString &oldPath, const QString &newPath);
+    void fileDeleted(const QString &path);
 
 private slots:
     void onItemDoubleClicked(const QModelIndex &index);

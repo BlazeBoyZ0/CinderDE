@@ -59,6 +59,40 @@ void MainWindow::setupUi() {
             createNewTab(path);
         }
     });
+
+    connect(m_fileExplorer, &FileExplorer::fileRenamed, this, [this](const QString &oldPath, const QString &newPath) {
+        for (int i = 0; i < m_tabWidget->count(); ++i) {
+            EditorTab *tab = tabAt(i);
+            if (!tab) continue;
+
+            if (tab->filePath() == oldPath) {
+                tab->setFilePath(newPath);
+                updateTabTitle(tab);
+            } else if (tab->filePath().startsWith(oldPath + "/")) {
+                QString rel = tab->filePath().mid(oldPath.length());
+                tab->setFilePath(newPath + rel);
+                updateTabTitle(tab);
+            }
+        }
+        if (currentTab()) {
+            m_statusFileTypeLabel->setText(currentTab()->fileTypeInfo().name);
+        }
+    });
+
+    connect(m_fileExplorer, &FileExplorer::fileDeleted, this, [this](const QString &deletedPath) {
+        for (int i = 0; i < m_tabWidget->count(); ++i) {
+            EditorTab *tab = tabAt(i);
+            if (!tab) continue;
+
+            if (tab->filePath() == deletedPath || tab->filePath().startsWith(deletedPath + "/")) {
+                tab->clearFilePathAndMarkModified();
+                updateTabTitle(tab);
+            }
+        }
+        if (currentTab()) {
+            m_statusFileTypeLabel->setText(currentTab()->fileTypeInfo().name);
+        }
+    });
 }
 
 void MainWindow::setupMenus() {
@@ -380,6 +414,16 @@ void MainWindow::openFile() {
 }
 
 void MainWindow::openFolder() {
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        EditorTab *tab = tabAt(i);
+        if (tab && tab->isModified()) {
+            m_tabWidget->setCurrentIndex(i);
+            if (!promptSaveIfModified(tab)) {
+                return; // User cancelled switching workspace
+            }
+        }
+    }
+
     QString dirPath = QFileDialog::getExistingDirectory(this, "Open Workspace Folder");
     if (!dirPath.isEmpty()) {
         m_fileExplorer->setWorkspacePath(dirPath);

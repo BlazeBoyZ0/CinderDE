@@ -9,6 +9,8 @@ namespace CinderDE {
 
 class Preferences {
 public:
+    static constexpr int DEFAULT_FONT_SIZE = 11;
+
     static Preferences& instance();
 
     int fontSize() const;

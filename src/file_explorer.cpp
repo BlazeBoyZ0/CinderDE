@@ -114,6 +114,10 @@ void FileExplorer::createNewFile() {
     QString fileName = QInputDialog::getText(this, "New File", "File name:", QLineEdit::Normal, "", &ok);
     if (ok && !fileName.trimmed().isEmpty()) {
         QString fullPath = QDir(dirPath).filePath(fileName.trimmed());
+        if (QFile::exists(fullPath)) {
+            QMessageBox::warning(this, "File Exists", QString("A file or directory named '%1' already exists.").arg(fileName.trimmed()));
+            return;
+        }
         QFile file(fullPath);
         if (file.open(QIODevice::WriteOnly)) {
             file.close();
@@ -155,7 +159,9 @@ void FileExplorer::renameSelected() {
     QString newName = QInputDialog::getText(this, "Rename", "New name:", QLineEdit::Normal, info.fileName(), &ok);
     if (ok && !newName.trimmed().isEmpty() && newName != info.fileName()) {
         QString newPath = QDir(info.absolutePath()).filePath(newName.trimmed());
-        if (!QFile::rename(currentPath, newPath)) {
+        if (QFile::rename(currentPath, newPath)) {
+            emit fileRenamed(currentPath, newPath);
+        } else {
             QMessageBox::critical(this, "Error", "Failed to rename file/directory.");
         }
     }
@@ -181,7 +187,9 @@ void FileExplorer::deleteSelected() {
             success = QFile::remove(path);
         }
 
-        if (!success) {
+        if (success) {
+            emit fileDeleted(path);
+        } else {
             QMessageBox::critical(this, "Error", "Failed to delete file/directory.");
         }
     }

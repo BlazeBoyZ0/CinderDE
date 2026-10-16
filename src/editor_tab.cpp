@@ -357,6 +357,18 @@ bool EditorTab::openFile(const QString &filePath) {
     return true;
 }
 
+void EditorTab::setFilePath(const QString &filePath) {
+    m_filePath = filePath;
+    m_typeInfo = FileTypeDetector::detectType(filePath);
+    emit fileTypeChanged(m_typeInfo);
+}
+
+void EditorTab::clearFilePathAndMarkModified() {
+    m_filePath.clear();
+    m_editor->document()->setModified(true);
+    emit modificationChanged(true);
+}
+
 bool EditorTab::save() {
     if (isUntitled()) {
         return false; // Requires saveAs
@@ -370,6 +382,14 @@ bool EditorTab::save() {
 
     QTextStream out(&file);
     out << m_editor->toPlainText();
+    out.flush();
+
+    if (file.error() != QFileDevice::NoError) {
+        QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        file.close();
+        return false;
+    }
+
     file.close();
 
     m_editor->document()->setModified(false);
@@ -381,13 +401,32 @@ bool EditorTab::save() {
 bool EditorTab::saveAs(const QString &filePath) {
     if (filePath.isEmpty()) return false;
 
-    m_filePath = filePath;
-    bool success = save();
-    if (success) {
-        m_typeInfo = FileTypeDetector::detectType(filePath);
-        emit fileTypeChanged(m_typeInfo);
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        return false;
     }
-    return success;
+
+    QTextStream out(&file);
+    out << m_editor->toPlainText();
+    out.flush();
+
+    if (file.error() != QFileDevice::NoError) {
+        QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        file.close();
+        return false;
+    }
+
+    file.close();
+
+    m_filePath = filePath;
+    m_typeInfo = FileTypeDetector::detectType(filePath);
+    m_editor->document()->setModified(false);
+
+    emit fileTypeChanged(m_typeInfo);
+    emit modificationChanged(false);
+
+    return true;
 }
 
 QString EditorTab::fileName() const {
@@ -417,7 +456,8 @@ void EditorTab::zoomOut(int range) {
 }
 
 void EditorTab::resetFontSize() {
-    setFontSize(Preferences::instance().fontSize());
+    setFontSize(Preferences::DEFAULT_FONT_SIZE);
+    Preferences::instance().setFontSize(Preferences::DEFAULT_FONT_SIZE);
 }
 
 void EditorTab::setWordWrap(bool wrap) {
