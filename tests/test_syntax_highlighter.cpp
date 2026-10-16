@@ -91,6 +91,18 @@ private slots:
         QVERIFY(b0.layout()->formats().count() > 0);
     }
 
+    void testUnknownExtensionNoHighlighting() {
+        QTextDocument doc;
+        CinderDE::SyntaxHighlighter highlighter(&doc);
+        highlighter.setLanguage(CinderDE::Language::None);
+
+        doc.setPlainText("int main() { return 0; }");
+        highlighter.rehighlight();
+
+        QTextBlock b0 = doc.findBlockByNumber(0);
+        QCOMPARE(b0.layout()->formats().count(), 0);
+    }
+
     void testTabLanguageReevaluationOnSaveAs() {
         CinderDE::EditorTab tab;
         QCOMPARE(tab.highlighter()->language(), CinderDE::Language::None);

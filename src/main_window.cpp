@@ -10,12 +10,14 @@
 #include <QKeySequence>
 #include <QDir>
 #include <QStyle>
+#include <QToolButton>
 
 namespace CinderDE {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
+    setObjectName("main_window");
     setupUi();
     applyTheme();
     loadSettings();
@@ -30,9 +32,13 @@ MainWindow::~MainWindow() {
 
 void MainWindow::setupUi() {
     m_splitter = new QSplitter(Qt::Horizontal, this);
+    m_splitter->setObjectName("main_splitter");
 
     m_fileExplorer = new FileExplorer(this);
+    m_fileExplorer->setObjectName("file_explorer");
+
     m_tabWidget = new QTabWidget(this);
+    m_tabWidget->setObjectName("main_tab_widget");
     m_tabWidget->setTabsClosable(true);
     m_tabWidget->setMovable(true);
     m_tabWidget->setDocumentMode(true);
@@ -51,6 +57,7 @@ void MainWindow::setupUi() {
 
     connect(m_tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
     connect(m_tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
+    connect(m_fileExplorer, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
     connect(m_fileExplorer, &FileExplorer::fileSelected, this, [this](const QString &path) {
         EditorTab *existing = findTabByPath(path);
         if (existing) {
@@ -165,11 +172,12 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::setupToolbar() {
-    QToolBar *toolbar = addToolBar("Main Toolbar");
+    QToolBar *toolbar = new QToolBar("Main Toolbar", this);
     toolbar->setObjectName("main_toolbar");
     toolbar->setMovable(false);
-    toolbar->setIconSize(QSize(18, 18));
-    toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    toolbar->setIconSize(QSize(16, 16));
+    toolbar->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    addToolBar(toolbar);
 
     toolbar->addAction("New", this, &MainWindow::newFile);
     toolbar->addAction("Open", this, &MainWindow::openFile);
@@ -224,16 +232,17 @@ void MainWindow::applyTheme() {
         QToolBar {
             background-color: #2d2d2d;
             border-bottom: 1px solid #333333;
-            spacing: 2px;
-            padding: 1px;
+            spacing: 3px;
+            padding: 2px 4px;
         }
         QToolButton {
             background-color: #3c3c3c;
             color: #cccccc;
             border: 1px solid #454545;
             border-radius: 3px;
-            padding: 2px 6px;
-            margin: 1px;
+            padding: 3px 8px;
+            margin: 1px 2px;
+            font-size: 12px;
         }
         QToolButton:hover {
             background-color: #4f4f4f;
@@ -262,16 +271,6 @@ void MainWindow::applyTheme() {
         QTabBar::tab:hover:!selected {
             background-color: #383838;
             color: #e0e0e0;
-        }
-        QTabBar::close-button {
-            subcontrol-origin: padding;
-            subcontrol-position: right;
-            border-radius: 3px;
-            padding: 2px;
-            margin: 2px;
-        }
-        QTabBar::close-button:hover {
-            background-color: #ff6b35;
         }
         QStatusBar {
             background-color: #252526;
@@ -313,10 +312,8 @@ void MainWindow::loadSettings() {
     m_fileExplorer->setVisible(prefs.explorerVisible());
     m_toggleExplorerAction->setChecked(prefs.explorerVisible());
 
-    QString lastWorkspace = prefs.lastWorkspace();
-    if (!lastWorkspace.isEmpty() && QDir(lastWorkspace).exists()) {
-        m_fileExplorer->setWorkspacePath(lastWorkspace);
-    }
+    // Do not automatically load last workspace or filesystem root.
+    // Workspace starts empty.
 }
 
 void MainWindow::saveSettings() {
@@ -374,6 +371,39 @@ EditorTab* MainWindow::createNewTab(const QString &filePath) {
     }
 
     int idx = m_tabWidget->addTab(tab, tab->fileName());
+
+    QToolButton *closeBtn = new QToolButton(m_tabWidget->tabBar());
+    closeBtn->setText("×");
+    closeBtn->setToolTip("Close Tab");
+    closeBtn->setCursor(Qt::PointingHandCursor);
+    closeBtn->setStyleSheet(R"(
+        QToolButton {
+            border: none;
+            background: transparent;
+            color: #aaaaaa;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 0px;
+            margin: 1px 2px 1px 2px;
+            width: 16px;
+            height: 16px;
+            border-radius: 8px;
+        }
+        QToolButton:hover {
+            background-color: #ff6b35;
+            color: #ffffff;
+        }
+    )");
+
+    connect(closeBtn, &QToolButton::clicked, this, [this, tab]() {
+        int index = m_tabWidget->indexOf(tab);
+        if (index != -1) {
+            closeTab(index);
+        }
+    });
+
+    m_tabWidget->tabBar()->setTabButton(idx, QTabBar::RightSide, closeBtn);
+
     m_tabWidget->setCurrentIndex(idx);
 
     connect(tab, &EditorTab::modificationChanged, this, [this, tab](bool) {
@@ -595,7 +625,7 @@ void MainWindow::resetFontSize() {
 void MainWindow::about() {
     QMessageBox::about(
         this, "About CinderDE",
-        "<h3>CinderDE v0.2</h3>"
+        "<h3>CinderDE v0.3</h3>"
         "<p>A lightweight desktop code editor built with Qt 6 for Linux.</p>"
         "<p>Designed for responsive editing on low-end hardware with dark charcoal theme & ember-orange accents.</p>");
 }
