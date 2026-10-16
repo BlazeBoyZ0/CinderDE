@@ -21,6 +21,10 @@ set(SOURCES
     src/preferences.cpp
     src/syntax_highlighter.cpp
     src/workspace_config.cpp
+    src/diagnostic_parser.cpp
+    src/output_panel.cpp
+    src/build_run_manager.cpp
+    src/build_run_dialog.cpp
 )
 
 set(HEADERS
@@ -32,6 +36,10 @@ set(HEADERS
     include/cinderde/syntax_theme.h
     include/cinderde/syntax_highlighter.h
     include/cinderde/workspace_config.h
+    include/cinderde/diagnostic_parser.h
+    include/cinderde/output_panel.h
+    include/cinderde/build_run_manager.h
+    include/cinderde/build_run_dialog.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
@@ -131,3 +139,61 @@ target_link_libraries(workspace_session_tests PRIVATE
 )
 
 add_test(NAME WorkspaceSessionTest COMMAND workspace_session_tests -platform offscreen)
+
+add_executable(diagnostic_parser_tests
+    tests/test_diagnostic_parser.cpp
+    src/diagnostic_parser.cpp
+)
+
+target_link_libraries(diagnostic_parser_tests PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME DiagnosticParserTest COMMAND diagnostic_parser_tests)
+
+add_executable(build_run_manager_tests
+    tests/test_build_run_manager.cpp
+    src/build_run_manager.cpp
+    src/preferences.cpp
+    src/workspace_config.cpp
+    include/cinderde/build_run_manager.h
+)
+
+target_link_libraries(build_run_manager_tests PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME BuildRunManagerTest COMMAND build_run_manager_tests)
+
+add_executable(output_panel_tests
+    tests/test_output_panel.cpp
+    src/output_panel.cpp
+    src/diagnostic_parser.cpp
+    include/cinderde/output_panel.h
+)
+
+target_link_libraries(output_panel_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME OutputPanelTest COMMAND output_panel_tests -platform offscreen)
+
+add_executable(v05_features_tests
+    tests/test_v05_features.cpp
+    src/build_run_manager.cpp
+    src/preferences.cpp
+    src/workspace_config.cpp
+    include/cinderde/build_run_manager.h
+)
+
+target_link_libraries(v05_features_tests PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME V05FeaturesTest COMMAND v05_features_tests)

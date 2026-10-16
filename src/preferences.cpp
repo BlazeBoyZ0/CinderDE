@@ -183,4 +183,20 @@ void Preferences::setWindowState(const QByteArray &state) {
     m_settings.setValue("ui/windowState", state);
 }
 
+QString Preferences::executionMode() const {
+    return m_settings.value("buildrun/executionMode", "output_panel").toString();
+}
+
+void Preferences::setExecutionMode(const QString &mode) {
+    m_settings.setValue("buildrun/executionMode", mode);
+}
+
+QString Preferences::terminalCommand() const {
+    return m_settings.value("buildrun/terminalCommand", "").toString();
+}
+
+void Preferences::setTerminalCommand(const QString &cmd) {
+    m_settings.setValue("buildrun/terminalCommand", cmd);
+}
+
 } // namespace CinderDE

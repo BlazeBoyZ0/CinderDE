@@ -70,6 +70,44 @@ WorkspaceConfig WorkspaceConfig::loadFromWorkspace(const QString &workspacePath)
         }
     }
 
+    auto extractString = [](const QJsonObject &obj, const QString &key, QString &outStr) -> bool {
+        if (obj.contains(key) && obj.value(key).isString()) {
+            outStr = obj.value(key).toString();
+            return true;
+        }
+        return false;
+    };
+
+    // Build command
+    if (extractString(root, "buildCommand", config.buildCommand) ||
+        extractString(root, "build.command", config.buildCommand)) {
+        config.hasBuildCommand = true;
+    }
+
+    // Run command
+    if (extractString(root, "runCommand", config.runCommand) ||
+        extractString(root, "run.command", config.runCommand)) {
+        config.hasRunCommand = true;
+    }
+
+    // Working directory
+    if (extractString(root, "workingDirectory", config.workingDirectory) ||
+        extractString(root, "build.workingDirectory", config.workingDirectory)) {
+        config.hasWorkingDirectory = true;
+    }
+
+    // Execution mode
+    if (extractString(root, "executionMode", config.executionMode) ||
+        extractString(root, "execution.mode", config.executionMode)) {
+        config.hasExecutionMode = true;
+    }
+
+    // Terminal command
+    if (extractString(root, "terminalCommand", config.terminalCommand) ||
+        extractString(root, "terminal.command", config.terminalCommand)) {
+        config.hasTerminalCommand = true;
+    }
+
     return config;
 }
 
@@ -105,6 +143,21 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
     }
     if (config.hasTabSize) {
         root["editor.tabSize"] = config.tabSize;
+    }
+    if (config.hasBuildCommand) {
+        root["buildCommand"] = config.buildCommand;
+    }
+    if (config.hasRunCommand) {
+        root["runCommand"] = config.runCommand;
+    }
+    if (config.hasWorkingDirectory) {
+        root["workingDirectory"] = config.workingDirectory;
+    }
+    if (config.hasExecutionMode) {
+        root["executionMode"] = config.executionMode;
+    }
+    if (config.hasTerminalCommand) {
+        root["terminalCommand"] = config.terminalCommand;
     }
 
     QFile file(filePath);

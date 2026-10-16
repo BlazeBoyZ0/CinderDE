@@ -11,6 +11,8 @@
 #include "cinderde/editor_tab.h"
 #include "cinderde/file_explorer.h"
 #include "cinderde/workspace_config.h"
+#include "cinderde/output_panel.h"
+#include "cinderde/build_run_manager.h"
 
 namespace CinderDE {
 
@@ -55,15 +57,31 @@ private slots:
     // Help actions
     void about();
 
+    // Build and Run actions
+    void buildAndRun();
+    void buildOnly();
+    void runOnly();
+    void stopProcess();
+    void toggleOutputPanel();
+    void showBuildRunSettings();
+
+    // Navigation actions
+    void nextTab();
+    void previousTab();
+    void navigateToDiagnostic(const QString &filePath, int line, int column);
+
     // Tab state slots
     void onTabChanged(int index);
     void onTabCloseRequested(int index);
     void updateTabTitle(EditorTab *tab);
 
 private:
-    QSplitter *m_splitter;
+    QSplitter *m_mainSplitter; // Vertical
+    QSplitter *m_topSplitter;  // Horizontal
     FileExplorer *m_fileExplorer;
     QTabWidget *m_tabWidget;
+    OutputPanel *m_outputPanel;
+    BuildRunManager *m_buildRunManager;
 
     // Status bar labels
     QLabel *m_statusCursorLabel;
@@ -72,8 +90,10 @@ private:
 
     // View action references for checking state
     QAction *m_toggleExplorerAction;
+    QAction *m_toggleOutputPanelAction;
     QAction *m_wordWrapAction;
     QAction *m_sessionRestoreAction;
+    QAction *m_stopProcessAction;
     QMenu *m_recentWorkspacesMenu;
 
     WorkspaceConfig m_activeWorkspaceConfig;
