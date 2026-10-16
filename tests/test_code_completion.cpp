@@ -1,0 +1,41 @@
+#include <QtTest>
+#include "cinderde/editor_tab.h"
+#include "cinderde/code_completion.h"
+
+class TestCodeCompletion : public QObject {
+    Q_OBJECT
+
+private slots:
+    void testCompletionPopupFilteringAndInsertion() {
+        CinderDE::EditorTab tab;
+        tab.setFilePath("main.cpp");
+
+        auto *editor = tab.editor();
+        editor->setPlainText("int myVariable = 42;\nmy");
+
+        QTextCursor cursor = editor->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor->setTextCursor(cursor);
+
+        CinderDE::CodeCompletionPopup popup(editor);
+        popup.updateSuggestions("my", CinderDE::Language::Cpp);
+
+        QVERIFY(popup.count() > 0);
+
+        bool foundMyVar = false;
+        for (int i = 0; i < popup.count(); ++i) {
+            if (popup.item(i)->text() == "myVariable") {
+                foundMyVar = true;
+                popup.setCurrentRow(i);
+                break;
+            }
+        }
+        QVERIFY(foundMyVar);
+
+        popup.insertCurrentSuggestion();
+        QCOMPARE(editor->toPlainText(), QString("int myVariable = 42;\nmyVariable"));
+    }
+};
+
+QTEST_MAIN(TestCodeCompletion)
+#include "test_code_completion.moc"

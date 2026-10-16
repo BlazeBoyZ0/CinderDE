@@ -16,6 +16,7 @@ set(SOURCES
     src/main.cpp
     src/main_window.cpp
     src/editor_tab.cpp
+    src/code_completion.cpp
     src/file_explorer.cpp
     src/file_type_detector.cpp
     src/preferences.cpp
@@ -30,6 +31,7 @@ set(SOURCES
 set(HEADERS
     include/cinderde/main_window.h
     include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
     include/cinderde/file_explorer.h
     include/cinderde/file_type_detector.h
     include/cinderde/preferences.h
@@ -67,10 +69,12 @@ add_test(NAME FileTypeDetectorTest COMMAND cinderde_tests)
 add_executable(editor_tab_tests
     tests/test_editor_tab.cpp
     src/editor_tab.cpp
+    src/code_completion.cpp
     src/file_type_detector.cpp
     src/preferences.cpp
     src/syntax_highlighter.cpp
     include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
 )
 
@@ -87,9 +91,11 @@ add_executable(syntax_highlighter_tests
     tests/test_syntax_highlighter.cpp
     src/syntax_highlighter.cpp
     src/editor_tab.cpp
+    src/code_completion.cpp
     src/file_type_detector.cpp
     src/preferences.cpp
     include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
 )
 
@@ -123,11 +129,13 @@ add_executable(workspace_session_tests
     src/preferences.cpp
     src/workspace_config.cpp
     src/editor_tab.cpp
+    src/code_completion.cpp
     src/file_type_detector.cpp
     src/syntax_highlighter.cpp
     include/cinderde/preferences.h
     include/cinderde/workspace_config.h
     include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
 )
 
@@ -197,3 +205,24 @@ target_link_libraries(v05_features_tests PRIVATE
 )
 
 add_test(NAME V05FeaturesTest COMMAND v05_features_tests)
+
+add_executable(code_completion_tests
+    tests/test_code_completion.cpp
+    src/editor_tab.cpp
+    src/code_completion.cpp
+    src/file_type_detector.cpp
+    src/preferences.cpp
+    src/syntax_highlighter.cpp
+    include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
+    include/cinderde/syntax_highlighter.h
+)
+
+target_link_libraries(code_completion_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME CodeCompletionTest COMMAND code_completion_tests -platform offscreen)

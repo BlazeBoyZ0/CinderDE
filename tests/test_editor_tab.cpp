@@ -68,6 +68,49 @@ private slots:
         QCOMPARE(tab.fontSize(), CinderDE::Preferences::DEFAULT_FONT_SIZE);
         QCOMPARE(CinderDE::Preferences::instance().fontSize(), CinderDE::Preferences::DEFAULT_FONT_SIZE);
     }
+
+    void testSmartIndentationAndBrackets() {
+        CinderDE::EditorTab tab;
+        tab.setFilePath("test.cpp");
+
+        auto *editor = tab.editor();
+        editor->setPlainText("int main() {");
+        QTextCursor cursor = editor->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        editor->setTextCursor(cursor);
+
+        QTest::keyClick(editor, Qt::Key_Return);
+        QCOMPARE(editor->toPlainText(), QString("int main() {\n    "));
+
+        // Test Bracket Pairing
+        QTest::keyClicks(editor, "(");
+        QCOMPARE(editor->toPlainText(), QString("int main() {\n    ()"));
+
+        // Test Backspace Pair Delete
+        QTest::keyClick(editor, Qt::Key_Backspace);
+        QCOMPARE(editor->toPlainText(), QString("int main() {\n    "));
+    }
+
+    void testCommentToggling() {
+        CinderDE::EditorTab tab;
+        tab.setFilePath("test.cpp");
+
+        auto *editor = tab.editor();
+        editor->setPlainText("int a = 1;\nint b = 2;");
+
+        QTextCursor cursor = editor->textCursor();
+        cursor.select(QTextCursor::Document);
+        editor->setTextCursor(cursor);
+
+        editor->toggleComment();
+        QCOMPARE(editor->toPlainText(), QString("// int a = 1;\n// int b = 2;"));
+
+        cursor.select(QTextCursor::Document);
+        editor->setTextCursor(cursor);
+
+        editor->toggleComment();
+        QCOMPARE(editor->toPlainText(), QString("int a = 1;\nint b = 2;"));
+    }
 };
 
 QTEST_MAIN(TestEditorTab)

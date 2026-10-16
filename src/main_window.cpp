@@ -208,6 +208,8 @@ void MainWindow::setupMenus() {
     editMenu->addAction("&Paste", QKeySequence::Paste, this, &MainWindow::paste);
     editMenu->addAction("Select &All", QKeySequence::SelectAll, this, &MainWindow::selectAll);
     editMenu->addSeparator();
+    editMenu->addAction("Toggle Line &Comment", QKeySequence(Qt::CTRL | Qt::Key_Slash), this, &MainWindow::toggleComment);
+    editMenu->addSeparator();
     editMenu->addAction("&Find...", QKeySequence::Find, this, &MainWindow::showFind);
     editMenu->addAction("&Replace...", QKeySequence(Qt::CTRL | Qt::Key_H), this, &MainWindow::showReplace);
 
@@ -879,6 +881,10 @@ void MainWindow::selectAll() {
     if (currentTab()) currentTab()->editor()->selectAll();
 }
 
+void MainWindow::toggleComment() {
+    if (currentTab()) currentTab()->editor()->toggleComment();
+}
+
 void MainWindow::showFind() {
     if (currentTab()) currentTab()->showFindReplaceBar(false);
 }
@@ -1046,9 +1052,9 @@ void MainWindow::resetFontSize() {
 void MainWindow::about() {
     QMessageBox::about(
         this, "About CinderDE",
-        "<h3>CinderDE v0.4</h3>"
+        "<h3>CinderDE v0.6</h3>"
         "<p>A lightweight desktop code editor built with Qt 6 for Linux.</p>"
-        "<p>Featuring Workspace & Session Persistence, Recent Projects, and Per-Workspace Preferences.</p>");
+        "<p>Featuring Smart Editing, Syntax Highlighting, Smart Indentation, Bracket Pairing, Code Completion, and Build/Run Tools.</p>");
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

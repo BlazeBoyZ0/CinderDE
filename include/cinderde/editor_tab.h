@@ -17,6 +17,7 @@
 namespace CinderDE {
 
 class CodeEditor;
+class CodeCompletionPopup;
 
 class LineNumberArea : public QWidget {
 public:
@@ -41,16 +42,29 @@ public:
     void setEditorFontSize(int size);
     void setEditorTabSize(int size);
 
+    void setLanguage(Language lang) { m_language = lang; }
+    Language language() const { return m_language; }
+
+    void toggleComment();
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *e) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
-    void highlightCurrentLine();
+    void highlightCurrentLineAndBracket();
     void updateLineNumberArea(const QRect &rect, int dy);
 
 private:
     QWidget *m_lineNumberArea;
+    Language m_language;
+    CodeCompletionPopup *m_completionPopup;
+
+    void handleSmartEnter();
+    void handleSmartBackspace(QKeyEvent *e);
+    bool handleBracketPairing(QKeyEvent *e);
+    void highlightMatchingBracket(QList<QTextEdit::ExtraSelection> &extraSelections);
 };
 
 class EditorTab : public QWidget {
