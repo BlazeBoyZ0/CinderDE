@@ -13,7 +13,7 @@ Preferences& Preferences::instance() {
 }
 
 int Preferences::fontSize() const {
-    return m_settings.value("editor/fontSize", 11).toInt();
+    return m_settings.value("editor/fontSize", DEFAULT_FONT_SIZE).toInt();
 }
 
 void Preferences::setFontSize(int size) {

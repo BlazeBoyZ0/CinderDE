@@ -61,6 +61,9 @@ public:
     bool save();
     bool saveAs(const QString &filePath);
 
+    void setFilePath(const QString &filePath);
+    void clearFilePathAndMarkModified();
+
     QString filePath() const { return m_filePath; }
     QString fileName() const;
     bool isModified() const;
