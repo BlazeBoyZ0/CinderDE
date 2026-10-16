@@ -52,7 +52,7 @@ private slots:
         QVERIFY(tempDir.isValid());
         QString invalidPath = tempDir.path(); // directory path cannot be opened for writing as a file
 
-        bool result = tab.saveAs(invalidPath);
+        bool result = tab.saveAs(invalidPath, false); // pass showDialog = false to avoid blocking modal dialog in unit tests
         QVERIFY(!result);
         QCOMPARE(tab.filePath(), path);
         QVERIFY(tab.isModified());
