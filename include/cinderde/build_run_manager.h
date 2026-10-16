@@ -31,6 +31,7 @@ public:
     State state() const { return m_state; }
 
     static QString detectTerminalEmulator();
+    static QString findCMakeExecutable(const QString &workspacePath, const QString &workingDir);
     static QString substituteMacros(const QString &cmd, const QString &filePath, const QString &workspacePath, const QString &workingDir);
     static QString resolveWorkingDirectory(const QString &filePath, const QString &workspacePath, const WorkspaceConfig &config);
     static std::pair<QString, QString> resolveCommands(const QString &filePath, const QString &workspacePath, const WorkspaceConfig &config);

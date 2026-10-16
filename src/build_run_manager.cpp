@@ -2,6 +2,8 @@
 #include "cinderde/preferences.h"
 #include <QFileInfo>
 #include <QDir>
+#include <QDirIterator>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QCoreApplication>
 #include <QTimer>
@@ -29,7 +31,12 @@ QString BuildRunManager::detectTerminalEmulator() {
         "xfce4-terminal",
         "alacritty",
         "kitty",
-        "xterm"
+        "xterm",
+        "lxterminal",
+        "mate-terminal",
+        "tilix",
+        "foot",
+        "wezterm"
     };
 
     for (const QString &candidate : candidates) {
@@ -37,6 +44,102 @@ QString BuildRunManager::detectTerminalEmulator() {
             return candidate;
         }
     }
+    return QString();
+}
+
+QString BuildRunManager::findCMakeExecutable(const QString &workspacePath, const QString &workingDir) {
+    QString wsPath = workspacePath;
+    if (wsPath.isEmpty()) wsPath = workingDir;
+    if (wsPath.isEmpty()) return QString();
+
+    QString cmakeListsPath = QDir(wsPath).filePath("CMakeLists.txt");
+    if (!QFile::exists(cmakeListsPath)) {
+        return QString();
+    }
+
+    QFile file(cmakeListsPath);
+    QString content;
+    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        content = QString::fromUtf8(file.readAll());
+        file.close();
+    }
+
+    QString projectName;
+    QRegularExpression projRx(R"(project\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    auto projMatch = projRx.match(content);
+    if (projMatch.hasMatch()) {
+        projectName = projMatch.captured(1);
+    }
+
+    QStringList targets;
+    QRegularExpression execRx(R"(add_executable\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    auto it = execRx.globalMatch(content);
+    while (it.hasNext()) {
+        auto match = it.next();
+        QString targetName = match.captured(1);
+        targets.append(targetName);
+    }
+
+    auto isTestTarget = [](const QString &t) {
+        QString lower = t.toLower();
+        return lower.contains("test") || lower.contains("check") || lower.contains("gtest") ||
+               lower.contains("catch") || lower.contains("benchmark") || lower.contains("autogen");
+    };
+
+    QString chosenTarget;
+    for (const QString &t : targets) {
+        if (!isTestTarget(t) && t.compare(projectName, Qt::CaseInsensitive) == 0) {
+            chosenTarget = t;
+            break;
+        }
+    }
+
+    if (chosenTarget.isEmpty()) {
+        for (const QString &t : targets) {
+            if (!isTestTarget(t)) {
+                chosenTarget = t;
+                break;
+            }
+        }
+    }
+
+    QString buildDir = QDir(wsPath).filePath("build");
+
+    if (!chosenTarget.isEmpty()) {
+        QStringList candidatePaths = {
+            QDir(buildDir).filePath(chosenTarget),
+            QDir(buildDir).filePath("bin/" + chosenTarget),
+            QDir(buildDir).filePath("src/" + chosenTarget),
+            QDir(buildDir).filePath("Debug/" + chosenTarget),
+            QDir(buildDir).filePath("Release/" + chosenTarget)
+        };
+
+        for (const QString &cand : candidatePaths) {
+            QFileInfo info(cand);
+            if (info.exists() && info.isFile() && info.isExecutable()) {
+                return cand;
+            }
+        }
+
+        return QDir(buildDir).filePath(chosenTarget);
+    }
+
+    if (QDir(buildDir).exists()) {
+        QDirIterator dirIt(buildDir, QDir::Files | QDir::Executable, QDirIterator::Subdirectories);
+        while (dirIt.hasNext()) {
+            dirIt.next();
+            QFileInfo info = dirIt.fileInfo();
+            QString fileName = info.fileName();
+            QString path = info.filePath();
+
+            if (isTestTarget(fileName)) continue;
+            if (path.contains("/CMakeFiles/") || path.contains("_autogen/")) continue;
+            if (fileName.endsWith(".so") || fileName.endsWith(".a") || fileName.endsWith(".o") || fileName.endsWith(".cmake")) continue;
+
+            return path;
+        }
+    }
+
     return QString();
 }
 
@@ -100,8 +203,12 @@ std::pair<QString, QString> BuildRunManager::resolveCommands(const QString &file
     // Check if CMake workspace
     if (!workspacePath.isEmpty() && QFile::exists(QDir(workspacePath).filePath("CMakeLists.txt"))) {
         buildCmd = "cmake -B build -S . && cmake --build build";
-        // Default run command if build target exists or configured
-        runCmd = config.hasRunCommand ? config.runCommand : "";
+        if (config.hasRunCommand && !config.runCommand.trimmed().isEmpty()) {
+            runCmd = config.runCommand;
+        } else {
+            QString workingDir = resolveWorkingDirectory(filePath, workspacePath, config);
+            runCmd = findCMakeExecutable(workspacePath, workingDir);
+        }
         return {buildCmd, runCmd};
     }
 
@@ -166,8 +273,22 @@ void BuildRunManager::run(const QString &filePath, const QString &workspacePath,
     QString runCmd = substituteMacros(commands.second, filePath, workspacePath, workingDir);
 
     if (runCmd.trimmed().isEmpty()) {
+        emit outputReceived("=== ERROR: No run command configured or determined for this project. ===\n", false);
         emit processError("No run command configured or determined for this file/project.", false);
         return;
+    }
+
+    // Check executable binary existence for relative/absolute binary paths
+    QString exeBin = QProcess::splitCommand(runCmd).value(0);
+    if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\')) && !QFile::exists(exeBin)) {
+        QString reFound = findCMakeExecutable(workspacePath, workingDir);
+        if (!reFound.isEmpty() && QFile::exists(reFound)) {
+            runCmd = reFound;
+        } else {
+            emit outputReceived(QString("=== ERROR: Executable '%1' not found ===\n").arg(exeBin), false);
+            emit processError(QString("Executable '%1' was not found.").arg(exeBin), false);
+            return;
+        }
     }
 
     QString mode = config.hasExecutionMode ? config.executionMode : Preferences::instance().executionMode();
@@ -248,9 +369,67 @@ bool BuildRunManager::launchExternalTerminal(const QString &command, const QStri
     }
 
     if (termExe.isEmpty()) {
-        emit processError("No supported external terminal emulator found. Please configure a terminal command in settings.", false);
+        emit outputReceived("=== ERROR: No external terminal emulator found ===\n", false);
+        emit processError("No supported external terminal emulator found. Please install a terminal emulator or configure a terminal command in settings.", false);
         return false;
     }
+
+    QStringList splitCmd = QProcess::splitCommand(termExe);
+    QString program = splitCmd.isEmpty() ? termExe : splitCmd.takeFirst();
+    QStringList userArgs = splitCmd;
+
+    QString programPath = QStandardPaths::findExecutable(program);
+    if (programPath.isEmpty() && QFile::exists(program)) {
+        programPath = program;
+    }
+
+    if (programPath.isEmpty()) {
+        emit outputReceived(QString("=== ERROR: Terminal executable '%1' not found ===\n").arg(program), false);
+        emit processError(QString("Failed to launch external terminal. Executable '%1' was not found.").arg(program), false);
+        return false;
+    }
+
+    QFileInfo fi(programPath);
+    QString canonical = fi.canonicalFilePath();
+    QString baseTerm = QFileInfo(canonical.isEmpty() ? programPath : canonical).fileName().toLower();
+    if (baseTerm.endsWith(".wrapper")) baseTerm.chop(8);
+    if (baseTerm.endsWith(".real")) baseTerm.chop(5);
+
+    QString pauseCmd = QString("%1; echo; read -p 'Process finished. Press Enter to exit...'").arg(command);
+
+    QStringList args = userArgs;
+
+    if (baseTerm == "gnome-terminal" || baseTerm == "mate-terminal") {
+        args << "--working-directory=" + workingDir << "--" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "konsole") {
+        args << "--workdir" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "xfce4-terminal") {
+        args << "--working-directory=" + workingDir << "-x" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "alacritty") {
+        args << "--working-directory" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "kitty") {
+        args << "--directory" << workingDir << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "lxterminal") {
+        args << "--working-directory=" + workingDir << "-e" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "tilix") {
+        args << "-w" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "foot") {
+        args << "-D" << workingDir << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "wezterm") {
+        args << "start" << "--cwd" << workingDir << "--" << "bash" << "-c" << pauseCmd;
+    } else { // xterm, rxvt, st, or fallback
+        args << "-e" << "bash" << "-c" << QString("cd '%1' && %2").arg(workingDir, pauseCmd);
+    }
+
+    stop();
+
+    m_process = new QProcess(this);
+    m_process->setWorkingDirectory(workingDir);
+
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &BuildRunManager::onReadyReadStandardOutput);
+    connect(m_process, &QProcess::readyReadStandardError, this, &BuildRunManager::onReadyReadStandardError);
+    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, &BuildRunManager::onProcessFinished);
+    connect(m_process, &QProcess::errorOccurred, this, &BuildRunManager::onProcessErrorOccurred);
 
     m_state = Running;
     emit stateChanged(true, "Running in External Terminal...");
@@ -259,44 +438,9 @@ bool BuildRunManager::launchExternalTerminal(const QString &command, const QStri
     emit outputReceived(QString("=== RUN STARTED (External Terminal) ===\nCommand: %1\nWorking Directory: %2\nTerminal: %3\n")
                             .arg(command)
                             .arg(workingDir)
-                            .arg(termExe), false);
+                            .arg(programPath), false);
 
-    QString formattedCmd;
-    QString baseTerm = QFileInfo(termExe).fileName();
-
-    if (baseTerm == "gnome-terminal") {
-        formattedCmd = QString("%1 --working-directory=\"%2\" -- bash -c \"%3; echo; read -p 'Process finished. Press Enter to exit...'\"")
-                           .arg(termExe, workingDir, command);
-    } else if (baseTerm == "konsole") {
-        formattedCmd = QString("%1 --workdir \"%2\" -e bash -c \"%3; echo; read -p 'Process finished. Press Enter to exit...'\"")
-                           .arg(termExe, workingDir, command);
-    } else if (baseTerm == "xfce4-terminal") {
-        formattedCmd = QString("%1 --working-directory=\"%2\" -e \"bash -c '%3; echo; read -p \\\"Process finished. Press Enter to exit...\\\"'\"")
-                           .arg(termExe, workingDir, command);
-    } else if (baseTerm == "alacritty") {
-        formattedCmd = QString("%1 --working-directory \"%2\" -e bash -c \"%3; echo; read -p 'Process finished. Press Enter to exit...'\"")
-                           .arg(termExe, workingDir, command);
-    } else if (baseTerm == "kitty") {
-        formattedCmd = QString("%1 --directory \"%2\" bash -c \"%3; echo; read -p 'Process finished. Press Enter to exit...'\"")
-                           .arg(termExe, workingDir, command);
-    } else { // xterm, x-terminal-emulator or custom
-        formattedCmd = QString("%1 -e bash -c \"cd '%2' && %3; echo; read -p 'Process finished. Press Enter to exit...'\"")
-                           .arg(termExe, workingDir, command);
-    }
-
-    bool success = QProcess::startDetached("sh", QStringList() << "-c" << formattedCmd);
-    if (!success) {
-        m_state = Idle;
-        emit stateChanged(false, "Failed to launch external terminal.");
-        emit processError(QString("Failed to launch external terminal executable '%1'.").arg(termExe), false);
-        return false;
-    }
-
-    emit outputReceived("[External Terminal] Process launched in external terminal session.\nNote: External terminal exit status is handled by the terminal session.\n", false);
-
-    m_state = Idle;
-    emit stateChanged(false, "Idle");
-    emit processFinished(0, QProcess::NormalExit, false);
+    m_process->start(programPath, args);
     return true;
 }
 
