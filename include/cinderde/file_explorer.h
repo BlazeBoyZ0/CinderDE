@@ -35,6 +35,9 @@ signals:
 public slots:
     void updateRecentWorkspacesUI();
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private slots:
     void onItemClicked(const QModelIndex &index);
     void showContextMenu(const QPoint &pos);

@@ -62,6 +62,13 @@ public:
     QByteArray windowState() const;
     void setWindowState(const QByteArray &state);
 
+    // Build and Run Global Preferences
+    QString executionMode() const; // "output_panel" (default) or "external_terminal"
+    void setExecutionMode(const QString &mode);
+
+    QString terminalCommand() const;
+    void setTerminalCommand(const QString &cmd);
+
 private:
     Preferences();
     QSettings m_settings;

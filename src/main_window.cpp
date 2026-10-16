@@ -1,6 +1,7 @@
 #include "cinderde/main_window.h"
 #include "cinderde/preferences.h"
 #include "cinderde/workspace_config.h"
+#include "cinderde/build_run_dialog.h"
 #include <QMenuBar>
 #include <QMenu>
 #include <QStatusBar>
@@ -33,8 +34,11 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::setupUi() {
-    m_splitter = new QSplitter(Qt::Horizontal, this);
-    m_splitter->setObjectName("main_splitter");
+    m_mainSplitter = new QSplitter(Qt::Vertical, this);
+    m_mainSplitter->setObjectName("main_splitter");
+
+    m_topSplitter = new QSplitter(Qt::Horizontal, this);
+    m_topSplitter->setObjectName("top_splitter");
 
     m_fileExplorer = new FileExplorer(this);
     m_fileExplorer->setObjectName("file_explorer");
@@ -45,17 +49,64 @@ void MainWindow::setupUi() {
     m_tabWidget->setMovable(true);
     m_tabWidget->setDocumentMode(true);
 
-    m_splitter->addWidget(m_fileExplorer);
-    m_splitter->addWidget(m_tabWidget);
-    m_splitter->setStretchFactor(0, 0);
-    m_splitter->setStretchFactor(1, 1);
-    m_splitter->setSizes(QList<int>() << 220 << 780);
+    m_outputPanel = new OutputPanel(this);
+    m_outputPanel->setObjectName("output_panel");
+    m_outputPanel->setVisible(false);
 
-    setCentralWidget(m_splitter);
+    m_topSplitter->addWidget(m_fileExplorer);
+    m_topSplitter->addWidget(m_tabWidget);
+    m_topSplitter->setStretchFactor(0, 0);
+    m_topSplitter->setStretchFactor(1, 1);
+    m_topSplitter->setSizes(QList<int>() << 220 << 780);
+
+    m_mainSplitter->addWidget(m_topSplitter);
+    m_mainSplitter->addWidget(m_outputPanel);
+    m_mainSplitter->setStretchFactor(0, 1);
+    m_mainSplitter->setStretchFactor(1, 0);
+    m_mainSplitter->setSizes(QList<int>() << 550 << 170);
+
+    setCentralWidget(m_mainSplitter);
+
+    m_buildRunManager = new BuildRunManager(this);
 
     setupMenus();
     setupToolbar();
     setupStatusBar();
+
+    connect(m_buildRunManager, &BuildRunManager::outputReceived, this, [this](const QString &text, bool isBuild) {
+        QString workingDir = BuildRunManager::resolveWorkingDirectory(
+            currentTab() ? currentTab()->filePath() : "",
+            m_fileExplorer->workspacePath(),
+            m_activeWorkspaceConfig);
+        m_outputPanel->setWorkingDir(workingDir);
+        if (isBuild) {
+            m_outputPanel->appendBuildOutput(text, workingDir);
+        } else {
+            m_outputPanel->appendRunOutput(text);
+        }
+    });
+
+    connect(m_buildRunManager, &BuildRunManager::stateChanged, this, [this](bool isRunning, const QString &statusText) {
+        m_outputPanel->setProcessRunning(isRunning, statusText);
+        if (m_stopProcessAction) {
+            m_stopProcessAction->setEnabled(isRunning);
+        }
+    });
+
+    connect(m_buildRunManager, &BuildRunManager::processError, this, [this](const QString &errorMsg, bool) {
+        m_outputPanel->appendSystemMessage(QString("Error: %1\n").arg(errorMsg));
+        statusBar()->showMessage(errorMsg, 4000);
+    });
+
+    connect(m_outputPanel, &OutputPanel::stopRequested, this, &MainWindow::stopProcess);
+    connect(m_outputPanel, &OutputPanel::stdinSubmitted, m_buildRunManager, &BuildRunManager::writeStdin);
+    connect(m_outputPanel, &OutputPanel::diagnosticClicked, this, &MainWindow::navigateToDiagnostic);
+    connect(m_outputPanel, &OutputPanel::closeRequested, this, [this]() {
+        m_outputPanel->setVisible(false);
+        if (m_toggleOutputPanelAction) {
+            m_toggleOutputPanelAction->setChecked(false);
+        }
+    });
 
     connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
         onTabChanged(index);
@@ -133,7 +184,7 @@ void MainWindow::setupMenus() {
     QAction *saveAct = fileMenu->addAction("&Save", QKeySequence::Save, this, &MainWindow::saveFile);
     saveAct->setStatusTip("Save current document");
 
-    QAction *saveAsAct = fileMenu->addAction("Save &As...", QKeySequence::SaveAs, this, &MainWindow::saveFileAs);
+    QAction *saveAsAct = fileMenu->addAction("Save &As...", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_S), this, &MainWindow::saveFileAs);
     saveAsAct->setStatusTip("Save current document with a new name");
 
     fileMenu->addSeparator();
@@ -160,12 +211,36 @@ void MainWindow::setupMenus() {
     editMenu->addAction("&Find...", QKeySequence::Find, this, &MainWindow::showFind);
     editMenu->addAction("&Replace...", QKeySequence(Qt::CTRL | Qt::Key_H), this, &MainWindow::showReplace);
 
+    // --- Build Menu ---
+    QMenu *buildMenu = menuBar->addMenu("&Build");
+
+    QAction *buildRunAct = buildMenu->addAction("Build && &Run", QKeySequence(Qt::Key_F5), this, &MainWindow::buildAndRun);
+    buildRunAct->setStatusTip("Build and run current project or file");
+
+    QAction *buildAct = buildMenu->addAction("&Build", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B), this, &MainWindow::buildOnly);
+    buildAct->setStatusTip("Build current project or file");
+
+    QAction *runAct = buildMenu->addAction("&Run", this, &MainWindow::runOnly);
+    runAct->setStatusTip("Run current project or binary");
+
+    m_stopProcessAction = buildMenu->addAction("&Stop Process", QKeySequence(Qt::SHIFT | Qt::Key_F5), this, &MainWindow::stopProcess);
+    m_stopProcessAction->setStatusTip("Stop active process");
+    m_stopProcessAction->setEnabled(false);
+
+    buildMenu->addSeparator();
+
+    buildMenu->addAction("Build && Run &Settings...", this, &MainWindow::showBuildRunSettings);
+
     // --- View Menu ---
     QMenu *viewMenu = menuBar->addMenu("&View");
 
     m_toggleExplorerAction = viewMenu->addAction("Toggle &Explorer", QKeySequence(Qt::CTRL | Qt::Key_B), this, &MainWindow::toggleExplorer);
     m_toggleExplorerAction->setCheckable(true);
     m_toggleExplorerAction->setChecked(Preferences::instance().explorerVisible());
+
+    m_toggleOutputPanelAction = viewMenu->addAction("Toggle &Output Panel", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_O), this, &MainWindow::toggleOutputPanel);
+    m_toggleOutputPanelAction->setCheckable(true);
+    m_toggleOutputPanelAction->setChecked(false);
 
     m_wordWrapAction = viewMenu->addAction("Toggle &Word Wrap", QKeySequence(Qt::ALT | Qt::Key_Z), this, &MainWindow::toggleWordWrap);
     m_wordWrapAction->setCheckable(true);
@@ -180,6 +255,17 @@ void MainWindow::setupMenus() {
     viewMenu->addAction("Increase Font Size", QKeySequence::ZoomIn, this, &MainWindow::increaseFontSize);
     viewMenu->addAction("Decrease Font Size", QKeySequence::ZoomOut, this, &MainWindow::decreaseFontSize);
     viewMenu->addAction("Reset Font Size", QKeySequence(Qt::CTRL | Qt::Key_0), this, &MainWindow::resetFontSize);
+
+    // --- Tab Navigation Shortcuts ---
+    QAction *nextTabAct = new QAction("Next Tab", this);
+    nextTabAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Tab));
+    connect(nextTabAct, &QAction::triggered, this, &MainWindow::nextTab);
+    addAction(nextTabAct);
+
+    QAction *prevTabAct = new QAction("Previous Tab", this);
+    prevTabAct->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Tab));
+    connect(prevTabAct, &QAction::triggered, this, &MainWindow::previousTab);
+    addAction(prevTabAct);
 
     // --- Help Menu ---
     QMenu *helpMenu = menuBar->addMenu("&Help");
@@ -201,6 +287,12 @@ void MainWindow::setupToolbar() {
     toolbar->addAction("Find", this, &MainWindow::showFind);
     toolbar->addSeparator();
     toolbar->addAction("Explorer", this, &MainWindow::toggleExplorer);
+    toolbar->addAction("Output", this, &MainWindow::toggleOutputPanel);
+    toolbar->addSeparator();
+    toolbar->addAction("Build", this, &MainWindow::buildOnly);
+    toolbar->addAction("Run", this, &MainWindow::runOnly);
+    toolbar->addAction("Build & Run", this, &MainWindow::buildAndRun);
+    toolbar->addAction("Stop", this, &MainWindow::stopProcess);
 }
 
 void MainWindow::setupStatusBar() {
@@ -793,6 +885,110 @@ void MainWindow::showFind() {
 
 void MainWindow::showReplace() {
     if (currentTab()) currentTab()->showFindReplaceBar(true);
+}
+
+void MainWindow::buildAndRun() {
+    saveFile();
+    m_outputPanel->setVisible(true);
+    if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
+
+    QString curPath = currentTab() ? currentTab()->filePath() : QString();
+    QString wsPath = m_fileExplorer->workspacePath();
+    m_buildRunManager->buildAndRun(curPath, wsPath, m_activeWorkspaceConfig);
+}
+
+void MainWindow::buildOnly() {
+    saveFile();
+    m_outputPanel->setVisible(true);
+    if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
+
+    QString curPath = currentTab() ? currentTab()->filePath() : QString();
+    QString wsPath = m_fileExplorer->workspacePath();
+    m_buildRunManager->build(curPath, wsPath, m_activeWorkspaceConfig);
+}
+
+void MainWindow::runOnly() {
+    saveFile();
+    m_outputPanel->setVisible(true);
+    if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
+
+    QString curPath = currentTab() ? currentTab()->filePath() : QString();
+    QString wsPath = m_fileExplorer->workspacePath();
+    m_buildRunManager->run(curPath, wsPath, m_activeWorkspaceConfig);
+}
+
+void MainWindow::stopProcess() {
+    m_buildRunManager->stop();
+}
+
+void MainWindow::toggleOutputPanel() {
+    bool vis = !m_outputPanel->isVisible();
+    m_outputPanel->setVisible(vis);
+    if (m_toggleOutputPanelAction) {
+        m_toggleOutputPanelAction->setChecked(vis);
+    }
+}
+
+void MainWindow::showBuildRunSettings() {
+    QString wsPath = m_fileExplorer->workspacePath();
+    BuildRunDialog dlg(wsPath, m_activeWorkspaceConfig, this);
+    if (dlg.exec() == QDialog::Accepted) {
+        WorkspaceConfig newCfg = dlg.config();
+        if (!wsPath.isEmpty()) {
+            WorkspaceConfig::saveToWorkspace(wsPath, newCfg);
+        } else {
+            if (newCfg.hasExecutionMode) {
+                Preferences::instance().setExecutionMode(newCfg.executionMode);
+            }
+            if (newCfg.hasTerminalCommand) {
+                Preferences::instance().setTerminalCommand(newCfg.terminalCommand);
+            }
+        }
+        applyWorkspaceSettings();
+    }
+}
+
+void MainWindow::nextTab() {
+    if (m_tabWidget->count() > 1) {
+        int next = (m_tabWidget->currentIndex() + 1) % m_tabWidget->count();
+        m_tabWidget->setCurrentIndex(next);
+    }
+}
+
+void MainWindow::previousTab() {
+    if (m_tabWidget->count() > 1) {
+        int prev = (m_tabWidget->currentIndex() - 1 + m_tabWidget->count()) % m_tabWidget->count();
+        m_tabWidget->setCurrentIndex(prev);
+    }
+}
+
+void MainWindow::navigateToDiagnostic(const QString &filePath, int line, int column) {
+    if (filePath.isEmpty()) return;
+
+    EditorTab *tab = findTabByPath(filePath);
+    if (!tab) {
+        if (QFileInfo::exists(filePath)) {
+            tab = createNewTab(filePath);
+        } else {
+            statusBar()->showMessage(QString("File not found: %1").arg(filePath), 3000);
+            return;
+        }
+    }
+
+    if (tab) {
+        m_tabWidget->setCurrentWidget(tab);
+        if (line > 0) {
+            QTextBlock block = tab->editor()->document()->findBlockByLineNumber(line - 1);
+            if (block.isValid()) {
+                QTextCursor cursor(block);
+                int colInBlock = (column > 0) ? qMin(column - 1, block.length() - 1) : 0;
+                cursor.setPosition(block.position() + colInBlock);
+                tab->editor()->setTextCursor(cursor);
+                tab->editor()->centerCursor();
+                tab->editor()->setFocus();
+            }
+        }
+    }
 }
 
 void MainWindow::toggleExplorer() {

@@ -8,6 +8,7 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QScrollArea>
+#include <QKeyEvent>
 
 namespace CinderDE {
 
@@ -22,6 +23,8 @@ FileExplorer::FileExplorer(QWidget *parent)
 
     setupWelcomeWidget();
     setupTreeWidget();
+
+    m_treeView->installEventFilter(this);
 
     m_stackedWidget->addWidget(m_welcomeWidget);
     m_stackedWidget->addWidget(m_treeContainer);
@@ -387,6 +390,20 @@ void FileExplorer::renameSelected() {
             QMessageBox::critical(this, "Error", "Failed to rename file/directory.");
         }
     }
+}
+
+bool FileExplorer::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == m_treeView && event->type() == QEvent::KeyPress) {
+        QKeyEvent *keyEvent = static_cast<QKeyEvent*>(event);
+        if (keyEvent->key() == Qt::Key_F2) {
+            renameSelected();
+            return true;
+        } else if (keyEvent->key() == Qt::Key_Delete) {
+            deleteSelected();
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void FileExplorer::deleteSelected() {
