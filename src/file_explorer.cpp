@@ -1,4 +1,5 @@
 #include "cinderde/file_explorer.h"
+#include "cinderde/preferences.h"
 #include <QDir>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -6,6 +7,7 @@
 #include <QHeaderView>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+#include <QScrollArea>
 
 namespace CinderDE {
 
@@ -80,12 +82,116 @@ void FileExplorer::setupWelcomeWidget() {
 
     connect(openBtn, &QPushButton::clicked, this, &FileExplorer::openFolderRequested);
 
+    QWidget *recentContainer = new QWidget(m_welcomeWidget);
+    m_recentContainerLayout = new QVBoxLayout(recentContainer);
+    m_recentContainerLayout->setContentsMargins(0, 10, 0, 0);
+    m_recentContainerLayout->setSpacing(4);
+
+    QScrollArea *scrollArea = new QScrollArea(m_welcomeWidget);
+    scrollArea->setWidgetResizable(true);
+    scrollArea->setFrameShape(QFrame::NoFrame);
+    scrollArea->setStyleSheet("background: transparent;");
+    scrollArea->setWidget(recentContainer);
+
     layout->addWidget(header);
-    layout->addStretch();
     layout->addWidget(msgTitle);
     layout->addWidget(msgSub);
     layout->addWidget(openBtn, 0, Qt::AlignCenter);
-    layout->addStretch();
+    layout->addWidget(scrollArea, 1);
+
+    updateRecentWorkspacesUI();
+}
+
+void FileExplorer::updateRecentWorkspacesUI() {
+    if (!m_recentContainerLayout) return;
+
+    // Clear existing layout items
+    QLayoutItem *child;
+    while ((child = m_recentContainerLayout->takeAt(0)) != nullptr) {
+        if (child->widget()) {
+            delete child->widget();
+        }
+        delete child;
+    }
+
+    QLabel *recentHeader = new QLabel("RECENT WORKSPACES", m_welcomeWidget);
+    recentHeader->setStyleSheet("font-weight: bold; color: #aaaaaa; font-size: 11px; margin-top: 10px; text-transform: uppercase;");
+    m_recentContainerLayout->addWidget(recentHeader);
+
+    QStringList recentList = Preferences::instance().recentWorkspaces();
+    if (recentList.isEmpty()) {
+        QLabel *noRecentLabel = new QLabel("No recent workspaces", m_welcomeWidget);
+        noRecentLabel->setStyleSheet("color: #777777; font-size: 11px; font-style: italic;");
+        m_recentContainerLayout->addWidget(noRecentLabel);
+    } else {
+        for (const QString &path : recentList) {
+            bool exists = QDir(path).exists();
+            QFileInfo info(path);
+            QString folderName = info.fileName();
+            if (folderName.isEmpty()) folderName = path;
+
+            QString btnText = folderName;
+            if (!exists) {
+                btnText += " (Missing)";
+            }
+
+            QPushButton *btn = new QPushButton(btnText, m_welcomeWidget);
+            btn->setToolTip(path);
+            btn->setCursor(Qt::PointingHandCursor);
+            btn->setFlat(true);
+
+            if (exists) {
+                btn->setStyleSheet(
+                    "QPushButton {"
+                    "  text-align: left;"
+                    "  color: #ff6b35;"
+                    "  background: transparent;"
+                    "  border: none;"
+                    "  padding: 4px 2px;"
+                    "  font-size: 12px;"
+                    "}"
+                    "QPushButton:hover {"
+                    "  color: #ffffff;"
+                    "  background-color: #383838;"
+                    "  border-radius: 3px;"
+                    "}"
+                );
+            } else {
+                btn->setStyleSheet(
+                    "QPushButton {"
+                    "  text-align: left;"
+                    "  color: #888888;"
+                    "  background: transparent;"
+                    "  border: none;"
+                    "  padding: 4px 2px;"
+                    "  font-size: 12px;"
+                    "  font-style: italic;"
+                    "}"
+                    "QPushButton:hover {"
+                    "  color: #aaaaaa;"
+                    "  background-color: #383838;"
+                    "  border-radius: 3px;"
+                    "}"
+                );
+            }
+
+            connect(btn, &QPushButton::clicked, this, [this, path, exists]() {
+                if (exists && QDir(path).exists()) {
+                    emit openWorkspaceRequested(path);
+                } else {
+                    QMessageBox::warning(
+                        this, "Workspace Missing",
+                        QString("The workspace folder no longer exists:\n%1").arg(path));
+                    Preferences::instance().removeRecentWorkspace(path);
+                    updateRecentWorkspacesUI();
+                }
+            });
+
+            m_recentContainerLayout->addWidget(btn);
+        }
+    }
+
+    m_recentContainerLayout->addStretch();
 }
 
 void FileExplorer::setupTreeWidget() {
@@ -153,6 +259,7 @@ void FileExplorer::clearWorkspace() {
     m_workspacePath.clear();
     m_model->setRootPath("");
     m_treeView->setRootIndex(QModelIndex());
+    updateRecentWorkspacesUI();
     m_stackedWidget->setCurrentWidget(m_welcomeWidget);
     emit workspaceChanged("");
 }

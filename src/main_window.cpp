@@ -1,5 +1,6 @@
 #include "cinderde/main_window.h"
 #include "cinderde/preferences.h"
+#include "cinderde/workspace_config.h"
 #include <QMenuBar>
 #include <QMenu>
 #include <QStatusBar>
@@ -9,22 +10,23 @@
 #include <QApplication>
 #include <QKeySequence>
 #include <QDir>
+#include <QFileInfo>
 #include <QStyle>
 #include <QToolButton>
+#include <QTextBlock>
+#include <QTextCursor>
 
 namespace CinderDE {
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent),
+      m_recentWorkspacesMenu(nullptr),
+      m_sessionRestoreAction(nullptr)
 {
     setObjectName("main_window");
     setupUi();
     applyTheme();
     loadSettings();
-
-    if (m_tabWidget->count() == 0) {
-        createNewTab();
-    }
 }
 
 MainWindow::~MainWindow() {
@@ -55,9 +57,13 @@ void MainWindow::setupUi() {
     setupToolbar();
     setupStatusBar();
 
-    connect(m_tabWidget, &QTabWidget::currentChanged, this, &MainWindow::onTabChanged);
+    connect(m_tabWidget, &QTabWidget::currentChanged, this, [this](int index) {
+        onTabChanged(index);
+        saveSessionState();
+    });
     connect(m_tabWidget, &QTabWidget::tabCloseRequested, this, &MainWindow::onTabCloseRequested);
     connect(m_fileExplorer, &FileExplorer::openFolderRequested, this, &MainWindow::openFolder);
+    connect(m_fileExplorer, &FileExplorer::openWorkspaceRequested, this, &MainWindow::openWorkspaceFolder);
     connect(m_fileExplorer, &FileExplorer::fileSelected, this, [this](const QString &path) {
         EditorTab *existing = findTabByPath(path);
         if (existing) {
@@ -84,6 +90,7 @@ void MainWindow::setupUi() {
         if (currentTab()) {
             m_statusFileTypeLabel->setText(currentTab()->fileTypeInfo().name);
         }
+        saveSessionState();
     });
 
     connect(m_fileExplorer, &FileExplorer::fileDeleted, this, [this](const QString &deletedPath) {
@@ -99,6 +106,7 @@ void MainWindow::setupUi() {
         if (currentTab()) {
             m_statusFileTypeLabel->setText(currentTab()->fileTypeInfo().name);
         }
+        saveSessionState();
     });
 }
 
@@ -116,6 +124,9 @@ void MainWindow::setupMenus() {
 
     QAction *openFolderAct = fileMenu->addAction("Open &Folder...", QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_O), this, &MainWindow::openFolder);
     openFolderAct->setStatusTip("Open a workspace folder");
+
+    m_recentWorkspacesMenu = fileMenu->addMenu("Recent &Workspaces");
+    connect(m_recentWorkspacesMenu, &QMenu::aboutToShow, this, &MainWindow::updateRecentWorkspacesMenu);
 
     fileMenu->addSeparator();
 
@@ -159,6 +170,10 @@ void MainWindow::setupMenus() {
     m_wordWrapAction = viewMenu->addAction("Toggle &Word Wrap", QKeySequence(Qt::ALT | Qt::Key_Z), this, &MainWindow::toggleWordWrap);
     m_wordWrapAction->setCheckable(true);
     m_wordWrapAction->setChecked(Preferences::instance().wordWrap());
+
+    m_sessionRestoreAction = viewMenu->addAction("Restore Session on Startup", this, &MainWindow::toggleSessionRestore);
+    m_sessionRestoreAction->setCheckable(true);
+    m_sessionRestoreAction->setChecked(Preferences::instance().sessionRestoreEnabled());
 
     viewMenu->addSeparator();
 
@@ -296,6 +311,74 @@ void MainWindow::applyTheme() {
     qApp->setStyleSheet(qss);
 }
 
+void MainWindow::updateRecentWorkspacesMenu() {
+    if (!m_recentWorkspacesMenu) return;
+
+    m_recentWorkspacesMenu->clear();
+    QStringList recentList = Preferences::instance().recentWorkspaces();
+
+    if (recentList.isEmpty()) {
+        QAction *emptyAct = m_recentWorkspacesMenu->addAction("No Recent Workspaces");
+        emptyAct->setEnabled(false);
+    } else {
+        for (const QString &path : recentList) {
+            bool exists = QDir(path).exists();
+            QFileInfo info(path);
+            QString folderName = info.fileName();
+            if (folderName.isEmpty()) folderName = path;
+
+            QString itemText = QString("%1  [%2]").arg(folderName, path);
+            if (!exists) {
+                itemText += " (Missing)";
+            }
+
+            QAction *act = m_recentWorkspacesMenu->addAction(itemText);
+            connect(act, &QAction::triggered, this, [this, path, exists]() {
+                if (exists && QDir(path).exists()) {
+                    openWorkspaceFolder(path);
+                } else {
+                    QMessageBox::warning(
+                        this, "Workspace Missing",
+                        QString("The workspace folder no longer exists:\n%1").arg(path));
+                    Preferences::instance().removeRecentWorkspace(path);
+                    updateRecentWorkspacesMenu();
+                    m_fileExplorer->updateRecentWorkspacesUI();
+                }
+            });
+        }
+    }
+
+    m_recentWorkspacesMenu->addSeparator();
+    QAction *clearAct = m_recentWorkspacesMenu->addAction("Clear Recent List");
+    connect(clearAct, &QAction::triggered, this, [this]() {
+        Preferences::instance().clearRecentWorkspaces();
+        updateRecentWorkspacesMenu();
+        m_fileExplorer->updateRecentWorkspacesUI();
+    });
+}
+
+void MainWindow::applyWorkspaceSettings() {
+    QString wsPath = m_fileExplorer->workspacePath();
+    if (!wsPath.isEmpty()) {
+        m_activeWorkspaceConfig = WorkspaceConfig::loadFromWorkspace(wsPath);
+    } else {
+        m_activeWorkspaceConfig = WorkspaceConfig();
+    }
+
+    bool wrap = m_activeWorkspaceConfig.hasWordWrap ? m_activeWorkspaceConfig.wordWrap : Preferences::instance().wordWrap();
+    int tabSz = m_activeWorkspaceConfig.hasTabSize ? m_activeWorkspaceConfig.tabSize : Preferences::instance().tabSize();
+
+    m_wordWrapAction->setChecked(wrap);
+
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        EditorTab *tab = tabAt(i);
+        if (tab) {
+            tab->setWordWrap(wrap);
+            tab->setTabSize(tabSz);
+        }
+    }
+}
+
 void MainWindow::loadSettings() {
     Preferences &prefs = Preferences::instance();
 
@@ -312,8 +395,66 @@ void MainWindow::loadSettings() {
     m_fileExplorer->setVisible(prefs.explorerVisible());
     m_toggleExplorerAction->setChecked(prefs.explorerVisible());
 
-    // Do not automatically load last workspace or filesystem root.
-    // Workspace starts empty.
+    restoreSession();
+}
+
+void MainWindow::restoreSession() {
+    Preferences &prefs = Preferences::instance();
+
+    if (!prefs.sessionRestoreEnabled()) {
+        m_fileExplorer->clearWorkspace();
+        applyWorkspaceSettings();
+        if (m_tabWidget->count() == 0) {
+            createNewTab();
+        }
+        return;
+    }
+
+    QString wsPath = prefs.sessionWorkspace();
+    if (wsPath.isEmpty()) {
+        wsPath = prefs.lastWorkspace();
+    }
+
+    if (!wsPath.isEmpty() && QDir(wsPath).exists()) {
+        m_fileExplorer->setWorkspacePath(wsPath);
+    } else {
+        m_fileExplorer->clearWorkspace();
+    }
+
+    applyWorkspaceSettings();
+
+    QStringList tabs = prefs.sessionOpenTabs();
+    QList<QPair<int, int>> cursorPositions = prefs.sessionCursorPositions();
+    int activeIdx = prefs.sessionActiveTab();
+
+    int openedCount = 0;
+    for (int i = 0; i < tabs.size(); ++i) {
+        const QString &filePath = tabs[i];
+        if (!filePath.isEmpty() && QFileInfo::exists(filePath) && QFileInfo(filePath).isFile()) {
+            EditorTab *tab = createNewTab(filePath);
+            if (tab) {
+                openedCount++;
+                if (i < cursorPositions.size()) {
+                    int line = cursorPositions[i].first;
+                    int col = cursorPositions[i].second;
+                    QTextBlock block = tab->editor()->document()->findBlockByLineNumber(qMax(0, line - 1));
+                    if (block.isValid()) {
+                        QTextCursor cursor(block);
+                        int posInBlock = qMin(qMax(0, col - 1), block.length() - 1);
+                        cursor.setPosition(block.position() + posInBlock);
+                        tab->editor()->setTextCursor(cursor);
+                    }
+                }
+            }
+        }
+    }
+
+    if (m_tabWidget->count() == 0) {
+        createNewTab();
+    } else {
+        int targetIdx = qBound(0, activeIdx, m_tabWidget->count() - 1);
+        m_tabWidget->setCurrentIndex(targetIdx);
+    }
 }
 
 void MainWindow::saveSettings() {
@@ -321,9 +462,38 @@ void MainWindow::saveSettings() {
     prefs.setWindowGeometry(saveGeometry());
     prefs.setWindowState(saveState());
     prefs.setExplorerVisible(m_fileExplorer->isVisible());
-    if (!m_fileExplorer->workspacePath().isEmpty()) {
-        prefs.setLastWorkspace(m_fileExplorer->workspacePath());
+    saveSessionState();
+}
+
+void MainWindow::saveSessionState() {
+    Preferences &prefs = Preferences::instance();
+
+    prefs.setSessionWorkspace(m_fileExplorer->workspacePath());
+
+    QStringList openTabs;
+    QList<QPair<int, int>> cursorPositions;
+    int activeIdx = m_tabWidget->currentIndex();
+    int validCount = 0;
+    int savedActiveIdx = 0;
+
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        EditorTab *tab = tabAt(i);
+        if (tab && !tab->isUntitled()) {
+            openTabs.append(tab->filePath());
+            QTextCursor cursor = tab->editor()->textCursor();
+            int line = cursor.blockNumber() + 1;
+            int col = cursor.columnNumber() + 1;
+            cursorPositions.append({line, col});
+            if (i == activeIdx) {
+                savedActiveIdx = validCount;
+            }
+            validCount++;
+        }
     }
+
+    prefs.setSessionOpenTabs(openTabs);
+    prefs.setSessionActiveTab(savedActiveIdx);
+    prefs.setSessionCursorPositions(cursorPositions);
 }
 
 EditorTab* MainWindow::currentTab() const {
@@ -352,6 +522,7 @@ EditorTab* MainWindow::createNewTab(const QString &filePath) {
         if (cur && cur->isUntitled() && !cur->isModified()) {
             if (cur->openFile(filePath)) {
                 updateTabTitle(cur);
+                saveSessionState();
                 return cur;
             } else {
                 return nullptr;
@@ -361,7 +532,12 @@ EditorTab* MainWindow::createNewTab(const QString &filePath) {
 
     EditorTab *tab = new EditorTab(this);
     tab->setFontSize(Preferences::instance().fontSize());
-    tab->setWordWrap(m_wordWrapAction->isChecked());
+
+    bool wrap = m_activeWorkspaceConfig.hasWordWrap ? m_activeWorkspaceConfig.wordWrap : Preferences::instance().wordWrap();
+    int tabSz = m_activeWorkspaceConfig.hasTabSize ? m_activeWorkspaceConfig.tabSize : Preferences::instance().tabSize();
+
+    tab->setWordWrap(wrap);
+    tab->setTabSize(tabSz);
 
     if (!filePath.isEmpty()) {
         if (!tab->openFile(filePath)) {
@@ -408,6 +584,7 @@ EditorTab* MainWindow::createNewTab(const QString &filePath) {
 
     connect(tab, &EditorTab::modificationChanged, this, [this, tab](bool) {
         updateTabTitle(tab);
+        saveSessionState();
     });
 
     connect(tab, &EditorTab::cursorPositionChanged, this, [this](int line, int col) {
@@ -419,6 +596,7 @@ EditorTab* MainWindow::createNewTab(const QString &filePath) {
     });
 
     updateTabTitle(tab);
+    saveSessionState();
     return tab;
 }
 
@@ -450,21 +628,40 @@ void MainWindow::openFile() {
     }
 }
 
-void MainWindow::openFolder() {
-    for (int i = 0; i < m_tabWidget->count(); ++i) {
-        EditorTab *tab = tabAt(i);
-        if (tab && tab->isModified()) {
-            m_tabWidget->setCurrentIndex(i);
-            if (!promptSaveIfModified(tab)) {
-                return; // User cancelled switching workspace
-            }
-        }
+void MainWindow::openWorkspaceFolder(const QString &dirPath) {
+    if (dirPath.isEmpty()) return;
+
+    if (!promptSaveAllIfModified()) {
+        return; // User cancelled
     }
 
+    QDir dir(dirPath);
+    if (!dir.exists()) {
+        QMessageBox::warning(
+            this, "Directory Not Found",
+            QString("The workspace directory does not exist:\n%1").arg(dirPath));
+        Preferences::instance().removeRecentWorkspace(dirPath);
+        updateRecentWorkspacesMenu();
+        m_fileExplorer->updateRecentWorkspacesUI();
+        return;
+    }
+
+    m_fileExplorer->setWorkspacePath(dirPath);
+    QString canonPath = m_fileExplorer->workspacePath();
+    if (!canonPath.isEmpty()) {
+        Preferences::instance().addRecentWorkspace(canonPath);
+        Preferences::instance().setLastWorkspace(canonPath);
+        applyWorkspaceSettings();
+        updateRecentWorkspacesMenu();
+        m_fileExplorer->updateRecentWorkspacesUI();
+        saveSessionState();
+    }
+}
+
+void MainWindow::openFolder() {
     QString dirPath = QFileDialog::getExistingDirectory(this, "Open Workspace Folder");
     if (!dirPath.isEmpty()) {
-        m_fileExplorer->setWorkspacePath(dirPath);
-        Preferences::instance().setLastWorkspace(dirPath);
+        openWorkspaceFolder(dirPath);
     }
 }
 
@@ -478,6 +675,7 @@ void MainWindow::saveFile() {
         if (tab->save()) {
             updateTabTitle(tab);
             statusBar()->showMessage("File saved", 2000);
+            saveSessionState();
         }
     }
 }
@@ -492,6 +690,7 @@ void MainWindow::saveFileAs() {
         if (tab->saveAs(filePath)) {
             updateTabTitle(tab);
             statusBar()->showMessage("File saved", 2000);
+            saveSessionState();
         }
     }
 }
@@ -520,6 +719,19 @@ bool MainWindow::promptSaveIfModified(EditorTab *tab) {
     }
 }
 
+bool MainWindow::promptSaveAllIfModified() {
+    for (int i = 0; i < m_tabWidget->count(); ++i) {
+        EditorTab *tab = tabAt(i);
+        if (tab && tab->isModified()) {
+            m_tabWidget->setCurrentIndex(i);
+            if (!promptSaveIfModified(tab)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 void MainWindow::closeTab(int index) {
     EditorTab *tab = tabAt(index);
     if (!tab) return;
@@ -531,6 +743,7 @@ void MainWindow::closeTab(int index) {
         if (m_tabWidget->count() == 0) {
             createNewTab();
         }
+        saveSessionState();
     }
 }
 
@@ -591,12 +804,24 @@ void MainWindow::toggleExplorer() {
 void MainWindow::toggleWordWrap() {
     bool wrap = !m_wordWrapAction->isChecked();
     m_wordWrapAction->setChecked(wrap);
-    Preferences::instance().setWordWrap(wrap);
+
+    QString wsPath = m_fileExplorer->workspacePath();
+    if (!wsPath.isEmpty()) {
+        m_activeWorkspaceConfig.hasWordWrap = true;
+        m_activeWorkspaceConfig.wordWrap = wrap;
+        WorkspaceConfig::saveToWorkspace(wsPath, m_activeWorkspaceConfig);
+    } else {
+        Preferences::instance().setWordWrap(wrap);
+    }
 
     for (int i = 0; i < m_tabWidget->count(); ++i) {
         EditorTab *tab = tabAt(i);
         if (tab) tab->setWordWrap(wrap);
     }
+}
+
+void MainWindow::toggleSessionRestore(bool checked) {
+    Preferences::instance().setSessionRestoreEnabled(checked);
 }
 
 void MainWindow::increaseFontSize() {
@@ -625,18 +850,15 @@ void MainWindow::resetFontSize() {
 void MainWindow::about() {
     QMessageBox::about(
         this, "About CinderDE",
-        "<h3>CinderDE v0.3</h3>"
+        "<h3>CinderDE v0.4</h3>"
         "<p>A lightweight desktop code editor built with Qt 6 for Linux.</p>"
-        "<p>Designed for responsive editing on low-end hardware with dark charcoal theme & ember-orange accents.</p>");
+        "<p>Featuring Workspace & Session Persistence, Recent Projects, and Per-Workspace Preferences.</p>");
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
-    for (int i = m_tabWidget->count() - 1; i >= 0; --i) {
-        EditorTab *tab = tabAt(i);
-        if (tab && !promptSaveIfModified(tab)) {
-            event->ignore();
-            return;
-        }
+    if (!promptSaveAllIfModified()) {
+        event->ignore();
+        return;
     }
     saveSettings();
     event->accept();
