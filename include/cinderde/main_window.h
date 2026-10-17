@@ -8,6 +8,7 @@
 #include <QToolBar>
 #include <QAction>
 #include <QMenu>
+class QDockWidget;
 #include "cinderde/python_debugger.h"
 #include "cinderde/editor_tab.h"
 #include "cinderde/file_explorer.h"
@@ -16,6 +17,8 @@
 #include "cinderde/build_run_manager.h"
 
 namespace CinderDE {
+
+class DebuggerPanel;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -98,6 +101,8 @@ private:
     OutputPanel *m_outputPanel;
     BuildRunManager *m_buildRunManager;
     PythonDebugger *m_pythonDebugger;
+    QDockWidget *m_debuggerDock;
+    DebuggerPanel *m_debuggerPanel;
 
     // Status bar labels
     QLabel *m_statusCursorLabel;
@@ -117,6 +122,7 @@ private:
     QAction *m_stepIntoAction;
     QAction *m_stepOutAction;
     QAction *m_stopDebuggingAction;
+    QAction *m_toggleDebuggerPanelAction;
     QMenu *m_recentWorkspacesMenu;
 
     WorkspaceConfig m_activeWorkspaceConfig;
