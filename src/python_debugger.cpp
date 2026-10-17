@@ -26,7 +26,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
         });
     });
     connect(m_client, &DebugAdapterClient::responseReceived, this,
-            [this](int, const QString &command, bool success, const QJsonObject &body, const QString &message) {
+            [this](int requestSeq, const QString &command, bool success, const QJsonObject &body, const QString &message) {
         if (!success) {
             reportResponseFailure(command, message);
             if (command == QStringLiteral("launch") || command == QStringLiteral("initialize")) {
