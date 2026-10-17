@@ -5,6 +5,8 @@
 #include "cinderde/preferences_dialog.h"
 #include "cinderde/lsp_dialog.h"
 #include "cinderde/debugger_dialog.h"
+#include "cinderde/debugger_config.h"
+#include <QInputDialog>
 #include "cinderde/lsp_manager.h"
 #include <QMenuBar>
 #include <QMenu>
@@ -26,7 +28,15 @@ namespace CinderDE {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       m_recentWorkspacesMenu(nullptr),
-      m_sessionRestoreAction(nullptr)
+      m_sessionRestoreAction(nullptr),
+      m_pythonDebugger(nullptr),
+      m_startDebuggingAction(nullptr),
+      m_continueDebuggingAction(nullptr),
+      m_pauseDebuggingAction(nullptr),
+      m_stepOverAction(nullptr),
+      m_stepIntoAction(nullptr),
+      m_stepOutAction(nullptr),
+      m_stopDebuggingAction(nullptr)
 {
     setObjectName("main_window");
     setupUi();
@@ -72,6 +82,7 @@ void MainWindow::setupUi() {
     setCentralWidget(m_mainSplitter);
 
     m_buildRunManager = new BuildRunManager(this);
+    m_pythonDebugger = new PythonDebugger(this);
 
     setupMenus();
     setupToolbar();
@@ -103,6 +114,32 @@ void MainWindow::setupUi() {
     });
 
     connect(m_outputPanel, &OutputPanel::stopRequested, this, &MainWindow::stopProcess);
+
+    connect(m_pythonDebugger, &PythonDebugger::outputReceived, this, [this](const QString &text) {
+        m_outputPanel->appendSystemMessage(text);
+        m_outputPanel->setVisible(true);
+        if (m_toggleOutputPanelAction)
+            m_toggleOutputPanelAction->setChecked(true);
+    });
+    connect(m_pythonDebugger, &PythonDebugger::currentLineChanged, this,
+            [this](const QString &filePath, int line) { navigateToDiagnostic(filePath, line, 1); });
+    connect(m_pythonDebugger, &PythonDebugger::stateChanged, this, [this](bool active, const QString &status) {
+        if (m_startDebuggingAction)
+            m_startDebuggingAction->setEnabled(!active);
+        if (m_continueDebuggingAction)
+            m_continueDebuggingAction->setEnabled(active);
+        if (m_pauseDebuggingAction)
+            m_pauseDebuggingAction->setEnabled(active);
+        if (m_stepOverAction)
+            m_stepOverAction->setEnabled(active);
+        if (m_stepIntoAction)
+            m_stepIntoAction->setEnabled(active);
+        if (m_stepOutAction)
+            m_stepOutAction->setEnabled(active);
+        if (m_stopDebuggingAction)
+            m_stopDebuggingAction->setEnabled(active);
+        statusBar()->showMessage(status, 3000);
+    });
     connect(m_outputPanel, &OutputPanel::stdinSubmitted, m_buildRunManager, &BuildRunManager::writeStdin);
     connect(m_outputPanel, &OutputPanel::diagnosticClicked, this, &MainWindow::navigateToDiagnostic);
     connect(m_outputPanel, &OutputPanel::closeRequested, this, [this]() {
@@ -250,15 +287,26 @@ void MainWindow::setupMenus() {
 
     QAction *debuggerConfigAct = toolsMenu->addAction("&Debuggers...");
     debuggerConfigAct->setStatusTip("Configure debugger adapters for the current workspace");
-    connect(debuggerConfigAct, &QAction::triggered, this, [this]() {
-        const QString workspacePath = m_fileExplorer->workspacePath();
-        if (workspacePath.isEmpty()) {
-            QMessageBox::information(this, "No Workspace", "Open a workspace before configuring its debuggers.");
-            return;
-        }
-        DebuggerDialog dialog(workspacePath, this);
-        dialog.exec();
-    });
+    connect(debuggerConfigAct, &QAction::triggered, this, &MainWindow::showDebuggerDialog);
+
+    // --- Debug Menu ---
+    QMenu *debugMenu = menuBar->addMenu("&Debug");
+    m_startDebuggingAction = debugMenu->addAction("Start Debugging", QKeySequence(Qt::Key_F6), this, &MainWindow::startDebugging);
+    m_startDebuggingAction->setStatusTip("Start debugging the current Python file with the configured external adapter");
+    debugMenu->addAction("Toggle Breakpoint", QKeySequence(Qt::Key_F9), this, &MainWindow::toggleBreakpoint);
+    debugMenu->addSeparator();
+    m_continueDebuggingAction = debugMenu->addAction("Continue", QKeySequence(Qt::Key_F7), this, &MainWindow::continueDebugging);
+    m_pauseDebuggingAction = debugMenu->addAction("Pause", QKeySequence(Qt::CTRL | Qt::Key_F6), this, &MainWindow::pauseDebugging);
+    m_stepOverAction = debugMenu->addAction("Step Over", QKeySequence(Qt::Key_F8), this, &MainWindow::stepOverDebugging);
+    m_stepIntoAction = debugMenu->addAction("Step Into", QKeySequence(Qt::CTRL | Qt::Key_F8), this, &MainWindow::stepIntoDebugging);
+    m_stepOutAction = debugMenu->addAction("Step Out", QKeySequence(Qt::SHIFT | Qt::Key_F8), this, &MainWindow::stepOutDebugging);
+    m_stopDebuggingAction = debugMenu->addAction("Stop Debugging", QKeySequence(Qt::SHIFT | Qt::Key_F6), this, &MainWindow::stopDebugging);
+    m_continueDebuggingAction->setEnabled(false);
+    m_pauseDebuggingAction->setEnabled(false);
+    m_stepOverAction->setEnabled(false);
+    m_stepIntoAction->setEnabled(false);
+    m_stepOutAction->setEnabled(false);
+    m_stopDebuggingAction->setEnabled(false);
 
     // --- View Menu ---
     QMenu *viewMenu = menuBar->addMenu("&View");
@@ -767,6 +815,9 @@ void MainWindow::openWorkspaceFolder(const QString &dirPath) {
         return;
     }
 
+    if (m_pythonDebugger && m_pythonDebugger->isActive())
+        m_pythonDebugger->stop();
+
     m_fileExplorer->setWorkspacePath(dirPath);
     QString canonPath = m_fileExplorer->workspacePath();
     if (!canonPath.isEmpty()) {
@@ -1109,6 +1160,8 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         event->ignore();
         return;
     }
+    if (m_pythonDebugger && m_pythonDebugger->isActive())
+        m_pythonDebugger->stop();
     saveSettings();
     event->accept();
 }
