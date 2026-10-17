@@ -36,7 +36,6 @@ signals:
 private:
     DebugAdapterClient *m_client;
     QString m_programPath;
-    QString m_workspacePath;
     QString m_workingDirectory;
     QSet<int> m_breakpointLines;
     int m_threadId = 0;
