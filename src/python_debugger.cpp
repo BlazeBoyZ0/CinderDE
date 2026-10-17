@@ -31,6 +31,15 @@ PythonDebugger::PythonDebugger(QObject *parent)
             return;
         if (!success) {
             reportResponseFailure(command, message);
+            if (command == QStringLiteral("stackTrace"))
+                emit stackFramesReceived(QJsonArray{});
+            else if (command == QStringLiteral("scopes"))
+                emit scopesReceived(QJsonArray{});
+            else if (command == QStringLiteral("variables")) {
+                const QString scopeName = m_variableRequestNames.take(requestSeq);
+                const int parentReference = m_variableRequestReferences.take(requestSeq);
+                emit variablesReceived(parentReference, scopeName, QJsonArray{});
+            }
             if (command == QStringLiteral("launch") || command == QStringLiteral("initialize")) {
                 m_stopping = true;
                 m_client->stop();
