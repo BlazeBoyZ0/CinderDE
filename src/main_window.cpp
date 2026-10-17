@@ -4,6 +4,7 @@
 #include "cinderde/build_run_dialog.h"
 #include "cinderde/preferences_dialog.h"
 #include "cinderde/lsp_dialog.h"
+#include "cinderde/debugger_dialog.h"
 #include "cinderde/lsp_manager.h"
 #include <QMenuBar>
 #include <QMenu>
@@ -246,6 +247,18 @@ void MainWindow::setupMenus() {
 
     QAction *lspAct = toolsMenu->addAction("Language &Servers...", this, &MainWindow::showLspDialog);
     lspAct->setStatusTip("Configure and manage Language Server Protocol (LSP) servers");
+
+    QAction *debuggerConfigAct = toolsMenu->addAction("&Debuggers...");
+    debuggerConfigAct->setStatusTip("Configure debugger adapters for the current workspace");
+    connect(debuggerConfigAct, &QAction::triggered, this, [this]() {
+        const QString workspacePath = m_fileExplorer->workspacePath();
+        if (workspacePath.isEmpty()) {
+            QMessageBox::information(this, "No Workspace", "Open a workspace before configuring its debuggers.");
+            return;
+        }
+        DebuggerDialog dialog(workspacePath, this);
+        dialog.exec();
+    });
 
     // --- View Menu ---
     QMenu *viewMenu = menuBar->addMenu("&View");
