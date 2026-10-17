@@ -5,6 +5,9 @@
 #include <QList>
 #include <QTableWidget>
 #include <QPushButton>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QCheckBox>
 #include "cinderde/debugger_config.h"
 
 namespace CinderDE {
