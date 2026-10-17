@@ -28,6 +28,9 @@ set(SOURCES
     src/build_run_manager.cpp
     src/build_run_dialog.cpp
     src/language_pack.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
+    src/lsp_dialog.cpp
     languages.qrc
 )
 
@@ -47,6 +50,10 @@ set(HEADERS
     include/cinderde/build_run_manager.h
     include/cinderde/build_run_dialog.h
     include/cinderde/language_pack.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
+    include/cinderde/lsp_dialog.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
@@ -81,10 +88,15 @@ add_executable(editor_tab_tests
     src/preferences.cpp
     src/syntax_highlighter.cpp
     src/language_pack.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
     languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
 )
 
 target_link_libraries(editor_tab_tests PRIVATE
@@ -104,10 +116,15 @@ add_executable(syntax_highlighter_tests
     src/file_type_detector.cpp
     src/preferences.cpp
     src/language_pack.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
     languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
 )
 
 target_link_libraries(syntax_highlighter_tests PRIVATE
@@ -144,12 +161,17 @@ add_executable(workspace_session_tests
     src/file_type_detector.cpp
     src/syntax_highlighter.cpp
     src/language_pack.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
     languages.qrc
     include/cinderde/preferences.h
     include/cinderde/workspace_config.h
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
 )
 
 target_link_libraries(workspace_session_tests PRIVATE
@@ -231,10 +253,15 @@ add_executable(code_completion_tests
     src/preferences.cpp
     src/syntax_highlighter.cpp
     src/language_pack.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
     languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
 )
 
 target_link_libraries(code_completion_tests PRIVATE
@@ -256,6 +283,8 @@ add_executable(language_pack_tests
     src/preferences.cpp
     src/build_run_manager.cpp
     src/workspace_config.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
     languages.qrc
     include/cinderde/language_pack.h
     include/cinderde/file_type_detector.h
@@ -263,6 +292,9 @@ add_executable(language_pack_tests
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/build_run_manager.h
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
 )
 
 target_link_libraries(language_pack_tests PRIVATE
@@ -273,3 +305,25 @@ target_link_libraries(language_pack_tests PRIVATE
 )
 
 add_test(NAME LanguagePackTest COMMAND language_pack_tests -platform offscreen)
+
+add_executable(lsp_tests
+    tests/test_lsp.cpp
+    src/lsp_client.cpp
+    src/lsp_manager.cpp
+    src/preferences.cpp
+    src/file_type_detector.cpp
+    src/language_pack.cpp
+    languages.qrc
+    include/cinderde/lsp_types.h
+    include/cinderde/lsp_client.h
+    include/cinderde/lsp_manager.h
+    include/cinderde/preferences.h
+)
+
+target_link_libraries(lsp_tests PRIVATE
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME LspTest COMMAND lsp_tests -platform offscreen)

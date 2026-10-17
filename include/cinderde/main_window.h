@@ -49,6 +49,7 @@ private slots:
 
     // Settings actions
     void showPreferencesDialog();
+    void showLspDialog();
 
     // View actions
     void toggleExplorer();

@@ -13,6 +13,7 @@
 #include <QResizeEvent>
 #include "cinderde/file_type_detector.h"
 #include "cinderde/syntax_highlighter.h"
+#include "cinderde/lsp_types.h"
 
 namespace CinderDE {
 
@@ -50,9 +51,21 @@ public:
 
     void toggleComment();
 
+    void setFilePath(const QString &filePath) { m_filePath = filePath; }
+    QString filePath() const { return m_filePath; }
+
+    void setDiagnostics(const QList<struct LspDiagnostic> &diagnostics);
+    void triggerCompletion();
+    void triggerHover();
+    void triggerGoToDefinition();
+    void triggerFindReferences();
+    void triggerRename();
+
 protected:
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *e) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
 
 private slots:
     void updateLineNumberAreaWidth(int newBlockCount);
@@ -64,6 +77,8 @@ private:
     Language m_language;
     LanguageDefinition m_languageDef;
     CodeCompletionPopup *m_completionPopup;
+    QString m_filePath;
+    QList<struct LspDiagnostic> m_diagnostics;
 
     void handleSmartEnter();
     void handleSmartBackspace(QKeyEvent *e);
@@ -76,6 +91,7 @@ class EditorTab : public QWidget {
 
 public:
     explicit EditorTab(QWidget *parent = nullptr);
+    ~EditorTab() override;
 
     bool openFile(const QString &filePath, bool showDialog = true);
     bool save(bool showDialog = true);

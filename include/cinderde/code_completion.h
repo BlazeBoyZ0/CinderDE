@@ -19,6 +19,7 @@ public:
 
     void updateSuggestions(const QString &prefix, Language lang);
     void updateSuggestions(const QString &prefix, const LanguageDefinition &def);
+    void updateLspSuggestions(const QString &prefix, const QList<struct LspCompletionItem> &items);
     void insertCurrentSuggestion();
 
 protected:

@@ -3,6 +3,8 @@
 #include "cinderde/workspace_config.h"
 #include "cinderde/build_run_dialog.h"
 #include "cinderde/preferences_dialog.h"
+#include "cinderde/lsp_dialog.h"
+#include "cinderde/lsp_manager.h"
 #include <QMenuBar>
 #include <QMenu>
 #include <QStatusBar>
@@ -238,6 +240,12 @@ void MainWindow::setupMenus() {
     buildMenu->addSeparator();
 
     buildMenu->addAction("Build && Run &Settings...", this, &MainWindow::showBuildRunSettings);
+
+    // --- Tools Menu ---
+    QMenu *toolsMenu = menuBar->addMenu("&Tools");
+
+    QAction *lspAct = toolsMenu->addAction("Language &Servers...", this, &MainWindow::showLspDialog);
+    lspAct->setStatusTip("Configure and manage Language Server Protocol (LSP) servers");
 
     // --- View Menu ---
     QMenu *viewMenu = menuBar->addMenu("&View");
@@ -751,6 +759,7 @@ void MainWindow::openWorkspaceFolder(const QString &dirPath) {
     if (!canonPath.isEmpty()) {
         Preferences::instance().addRecentWorkspace(canonPath);
         Preferences::instance().setLastWorkspace(canonPath);
+        LspManager::instance().setWorkspacePath(canonPath);
         applyWorkspaceSettings();
         updateRecentWorkspacesMenu();
         m_fileExplorer->updateRecentWorkspacesUI();
@@ -897,6 +906,11 @@ void MainWindow::showFind() {
 
 void MainWindow::showReplace() {
     if (currentTab()) currentTab()->showFindReplaceBar(true);
+}
+
+void MainWindow::showLspDialog() {
+    LspDialog dlg(this);
+    dlg.exec();
 }
 
 void MainWindow::showPreferencesDialog() {

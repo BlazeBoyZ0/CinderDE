@@ -1,6 +1,8 @@
 #include "cinderde/preferences.h"
+#include "cinderde/lsp_types.h"
 #include <QDir>
 #include <QVariant>
+#include <QVariantMap>
 
 namespace CinderDE {
 
@@ -197,6 +199,82 @@ QString Preferences::terminalCommand() const {
 
 void Preferences::setTerminalCommand(const QString &cmd) {
     m_settings.setValue("buildrun/terminalCommand", cmd);
+}
+
+QList<LspServerConfig> Preferences::lspServerConfigs() const {
+    QList<LspServerConfig> result;
+    int size = m_settings.beginReadArray("lsp/servers");
+    for (int i = 0; i < size; ++i) {
+        m_settings.setArrayIndex(i);
+        LspServerConfig cfg;
+        cfg.id = m_settings.value("id").toString();
+        cfg.name = m_settings.value("name").toString();
+        cfg.languageId = m_settings.value("languageId").toString();
+        cfg.extensions = m_settings.value("extensions").toStringList();
+        cfg.executable = m_settings.value("executable").toString();
+        cfg.arguments = m_settings.value("arguments").toStringList();
+        cfg.enabled = m_settings.value("enabled", true).toBool();
+
+        QVariantMap envMap = m_settings.value("environment").toMap();
+        for (auto it = envMap.begin(); it != envMap.end(); ++it) {
+            cfg.environment[it.key()] = it.value().toString();
+        }
+
+        if (!cfg.id.isEmpty()) {
+            result.append(cfg);
+        }
+    }
+    m_settings.endArray();
+    return result;
+}
+
+void Preferences::setLspServerConfigs(const QList<LspServerConfig> &configs) {
+    m_settings.beginWriteArray("lsp/servers");
+    for (int i = 0; i < configs.size(); ++i) {
+        m_settings.setArrayIndex(i);
+        const auto &cfg = configs[i];
+        m_settings.setValue("id", cfg.id);
+        m_settings.setValue("name", cfg.name);
+        m_settings.setValue("languageId", cfg.languageId);
+        m_settings.setValue("extensions", cfg.extensions);
+        m_settings.setValue("executable", cfg.executable);
+        m_settings.setValue("arguments", cfg.arguments);
+        m_settings.setValue("enabled", cfg.enabled);
+
+        QVariantMap envMap;
+        for (auto it = cfg.environment.begin(); it != cfg.environment.end(); ++it) {
+            envMap[it.key()] = it.value();
+        }
+        m_settings.setValue("environment", envMap);
+    }
+    m_settings.endArray();
+}
+
+void Preferences::saveLspServerConfig(const LspServerConfig &config) {
+    QList<LspServerConfig> list = lspServerConfigs();
+    bool found = false;
+    for (int i = 0; i < list.size(); ++i) {
+        if (list[i].id == config.id) {
+            list[i] = config;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        list.append(config);
+    }
+    setLspServerConfigs(list);
+}
+
+void Preferences::removeLspServerConfig(const QString &id) {
+    QList<LspServerConfig> list = lspServerConfigs();
+    QList<LspServerConfig> updated;
+    for (const auto &cfg : list) {
+        if (cfg.id != id) {
+            updated.append(cfg);
+        }
+    }
+    setLspServerConfigs(updated);
 }
 
 } // namespace CinderDE
