@@ -1,77 +1,89 @@
-# CinderDE v0.2
+# CinderDE v0.8
 
-CinderDE (Cinder Development Environment) is a lightweight desktop text and source-code editor built with C++ and Qt 6, designed for low-end Linux systems (such as Linux Mint XFCE with limited RAM and older CPUs). Inspired by the core editing capabilities of modern editors, CinderDE provides a fast, responsive, and comfortable code editing experience without heavyweight IDE bloat.
+CinderDE (Cinder Development Environment) is a lightweight desktop code editor built with C++17 and Qt 6 Widgets. It is designed for Linux desktops where RAM and CPU resources are limited, while still providing a comfortable coding workflow.
 
-## Features (v0.2 Release)
+CinderDE keeps its core editor lightweight and makes language intelligence optional: users can configure external Language Server Protocol (LSP) programs instead of having language servers bundled into the application.
 
-- **Visual Design & UI Polish**: Dark charcoal theme (`#1e1e1e`/`#252526`) with ember-orange accents (`#ff6b35`). Features polished tab close (`×`) controls, clean toolbar layout, and warning-free window state restoration.
-- **Lightweight Syntax Highlighting**: Built-in stateful syntax highlighting for C, C++, and Python with restrained, readable theme colors.
-  - **C**: `.c`, `.h`
-  - **C++**: `.cpp`, `.cc`, `.hpp`, `.h`
-  - **Python**: `.py`
-  - Supports keywords, strings, single/multiline comments, numbers, operators, preprocessor directives (`#include`, `#define`), Python decorators, and Python triple-quoted strings across block boundaries.
-- **Tabbed Interface**: Manage multiple documents simultaneously with tab switching, unsaved change indicators, and close controls.
-- **Line Numbers & Line Highlighting**: Custom sidebar displaying line numbers alongside active cursor line highlighting.
-- **File Explorer Sidebar**: Browse directory structure, expand/collapse folders, create files/directories, rename, and delete items with confirmation dialogs.
-- **Find and Replace Bar**: Embedded non-modal find and replace tool supporting case matching and match counts.
-- **File-Type Recognition**: Extension-based file type classification displayed in the status bar. Re-evaluates syntax highlighting upon opening files or performing "Save As".
-- **Binary Content Protection**: Detects likely binary files before opening and warns the user to avoid corrupting text or displaying unprintable characters.
-- **Persistence & Preferences**: Uses `QSettings` to save and restore font size, word-wrap preference, explorer panel visibility, window geometry, and last workspace directory.
-- **Keyboard Shortcuts**: Standard desktop editor shortcuts (Ctrl+N, Ctrl+O, Ctrl+S, Ctrl+Shift+S, Ctrl+Z, Ctrl+Y, Ctrl+F, Ctrl+H, Ctrl+B, Ctrl+Shift+O).
+## Features
 
-## Dependencies
+### Editing and navigation
+- Dark charcoal UI with ember-orange accents.
+- Tabbed editing with unsaved-change indicators and prompts before discarding changes.
+- Create, open, save, and Save As files.
+- Line numbers, current-line highlighting, matching-bracket highlighting, smart indentation, bracket pairing, and configurable tab size.
+- Find and replace, line/column status, font-size controls, and optional word wrap.
+- File explorer for browsing a workspace and creating, renaming, or deleting files and folders.
+- Session and workspace restoration, including the option to restore the previous workspace and tabs.
+- Keyboard shortcuts for common editing actions, completion, go-to-definition, references, and rename.
 
-- **C++ Compiler**: GCC or Clang supporting C++17.
-- **Build System**: CMake 3.16 or newer.
-- **GUI Framework**: Qt 6 (Components: `Widgets`, `Core`, `Gui`, `Test`).
+### Syntax highlighting and built-in completion
+- Built-in syntax highlighting for C, C++, and Python.
+- Lightweight word completion based on language keywords, built-ins, and identifiers found in the current document.
+- Built-in word completion remains available without an LSP.
 
-### On Ubuntu / Linux Mint / Debian:
+### Optional LSP support
+CinderDE v0.8 includes an optional LSP client. No language server is bundled or required to use CinderDE. Install a compatible server separately and configure its executable, arguments, language ID, and file extensions in CinderDE's LSP settings.
 
-```bash
-sudo apt-get update
-sudo apt-get install -y qt6-base-dev qt6-tools-dev cmake g++
-```
+When a configured server supports the relevant capabilities, CinderDE can provide:
+- Language-aware completion, including member completion after trigger characters such as `.`.
+- Diagnostics and editor underlines.
+- Hover information.
+- Go to definition.
+- Find references.
+- Rename symbol.
 
-## How to Build
+Support for individual operations depends on the configured language server and the capabilities it advertises. Automatic LSP completion is debounced while typing to avoid sending a request for every keystroke; trigger characters such as `.` request completion immediately. `Ctrl+Space` remains available to request completion manually.
 
-1. Clone or navigate to the CinderDE repository root.
-2. Create a build directory and configure CMake:
+Language servers run as external processes. Their memory use depends on the server and project. For the lightest experience, leave LSP disabled when language intelligence is not needed.
 
-```bash
-mkdir -p build && cd build
-cmake ..
-```
+### Build and run
+- Build/run actions with an integrated output panel.
+- Optional external-terminal execution mode, where supported by the configured run workflow.
 
-3. Build the project:
+## Requirements
 
-```bash
-make -j$(nproc)
-```
+- C++17 compiler (GCC or Clang).
+- CMake 3.16 or newer.
+- Qt 6 development packages: Core, Gui, Widgets, and Test.
 
-## How to Launch
-
-After building, run the application executable from the `build` directory:
+On Ubuntu or Linux Mint, install the common dependencies with:
 
 ```bash
-./cinderde
+sudo apt update
+sudo apt install build-essential cmake qt6-base-dev
 ```
 
-To run unit tests:
+## Build
+
+From the repository root:
 
 ```bash
-ctest --output-on-failure
+cmake -B build -S .
+cmake --build build
 ```
 
-## Basic Usage
+Launch the editor:
 
-- **File Operations**: Use the **File** menu or Toolbar to create new files, open existing files, open a workspace directory, or save documents.
-- **Editing**: Standard undo, redo, cut, copy, paste, select all, find, and replace functions are accessible via the **Edit** menu or standard keyboard shortcuts.
-- **Syntax Highlighting**: Automatically activated when opening or saving files with `.c`, `.cpp`, `.cc`, `.hpp`, `.h`, or `.py` extensions.
-- **Sidebar**: Toggle the File Explorer sidebar via **View -> Toggle Explorer** or `Ctrl+B`. Right-click within the file explorer tree to create, rename, or delete files and folders.
-- **Font Size & Word Wrap**: Adjust font size (`Ctrl++`, `Ctrl+-`, `Ctrl+0`) or toggle word wrap (`Alt+Z`) from the **View** menu.
+```bash
+./build/cinderde
+```
 
-## Scope & Limitations
+Run the test suite:
 
-CinderDE is strictly a lightweight code editor and intentionally excludes heavyweight IDE features:
-- No build/run buttons or integrated terminal.
-- No language servers, autocomplete, or debugger integration.
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+## Optional language server setup
+
+1. Install a language server for the language you use. CinderDE does not download or bundle servers.
+2. Open CinderDE's LSP configuration and add a server entry.
+3. Set the server executable and any required command-line arguments. For stdio-based servers, use the server's documented stdio option.
+4. Set the language ID and file extensions the server handles, then enable the entry.
+5. Open a matching source file in a workspace and check the LSP status/log panel.
+
+For example, Pyright can be configured as an external server for Python files with language ID `python`, extension `py`, and the executable/arguments recommended by Pyright's installation instructions.
+
+## Scope
+
+CinderDE is a lightweight editor and extensible coding environment, not a full replacement for every feature of a heavyweight IDE. It does not bundle language servers or a debugger. Language intelligence and its resource usage depend on which optional external servers the user chooses to install and run.
