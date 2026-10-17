@@ -156,15 +156,16 @@ DebuggerDialog::DebuggerDialog(const QString &workspacePath, QWidget *parent)
     )");
     auto *layout = new QVBoxLayout(this);
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(5);
+    m_table->setColumnCount(6);
     m_table->setHorizontalHeaderLabels({QStringLiteral("Name"), QStringLiteral("Language"),
-                                        QStringLiteral("Adapter"), QStringLiteral("Enabled"),
-                                        QStringLiteral("Working Directory")});
+                                        QStringLiteral("Adapter"), QStringLiteral("Python Runtime"),
+                                        QStringLiteral("Enabled"), QStringLiteral("Working Directory")});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -215,8 +216,9 @@ void DebuggerDialog::refreshTable()
         m_table->setItem(row, 0, new QTableWidgetItem(config.name));
         m_table->setItem(row, 1, new QTableWidgetItem(config.languageId));
         m_table->setItem(row, 2, new QTableWidgetItem(config.executable));
-        m_table->setItem(row, 3, new QTableWidgetItem(config.enabled ? QStringLiteral("Yes") : QStringLiteral("No")));
-        m_table->setItem(row, 4, new QTableWidgetItem(config.workingDirectory));
+        m_table->setItem(row, 3, new QTableWidgetItem(config.runtimeExecutable));
+        m_table->setItem(row, 4, new QTableWidgetItem(config.enabled ? QStringLiteral("Yes") : QStringLiteral("No")));
+        m_table->setItem(row, 5, new QTableWidgetItem(config.workingDirectory));
     }
     const bool selected = selectedRow() >= 0;
     m_editButton->setEnabled(selected);
