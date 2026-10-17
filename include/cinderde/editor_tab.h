@@ -11,6 +11,7 @@
 #include <QVBoxLayout>
 #include <QPaintEvent>
 #include <QResizeEvent>
+#include <QTimer>
 #include "cinderde/file_type_detector.h"
 #include "cinderde/syntax_highlighter.h"
 #include "cinderde/lsp_types.h"
@@ -77,6 +78,8 @@ private:
     Language m_language;
     LanguageDefinition m_languageDef;
     CodeCompletionPopup *m_completionPopup;
+    QTimer *m_autoCompletionTimer;
+    int m_completionRequestGeneration;
     QString m_filePath;
     QList<struct LspDiagnostic> m_diagnostics;
 
