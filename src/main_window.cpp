@@ -6,6 +6,8 @@
 #include "cinderde/lsp_dialog.h"
 #include "cinderde/debugger_dialog.h"
 #include "cinderde/debugger_config.h"
+#include "cinderde/debugger_panel.h"
+#include <QDockWidget>
 #include <QInputDialog>
 #include <algorithm>
 #include "cinderde/lsp_manager.h"
@@ -29,6 +31,8 @@ namespace CinderDE {
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       m_pythonDebugger(nullptr),
+      m_debuggerDock(nullptr),
+      m_debuggerPanel(nullptr),
       m_sessionRestoreAction(nullptr),
       m_startDebuggingAction(nullptr),
       m_continueDebuggingAction(nullptr),
@@ -37,6 +41,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_stepIntoAction(nullptr),
       m_stepOutAction(nullptr),
       m_stopDebuggingAction(nullptr),
+      m_toggleDebuggerPanelAction(nullptr),
       m_recentWorkspacesMenu(nullptr)
 {
     setObjectName("main_window");
@@ -82,6 +87,13 @@ void MainWindow::setupUi() {
 
     setCentralWidget(m_mainSplitter);
 
+    m_debuggerPanel = new DebuggerPanel(this);
+    m_debuggerDock = new QDockWidget("Debugger", this);
+    m_debuggerDock->setObjectName("debugger_dock");
+    m_debuggerDock->setWidget(m_debuggerPanel);
+    addDockWidget(Qt::RightDockWidgetArea, m_debuggerDock);
+    m_debuggerDock->hide();
+
     m_buildRunManager = new BuildRunManager(this);
     m_pythonDebugger = new PythonDebugger(this);
 
@@ -124,6 +136,16 @@ void MainWindow::setupUi() {
     });
     connect(m_pythonDebugger, &PythonDebugger::currentLineChanged, this,
             [this](const QString &filePath, int line) { navigateToDiagnostic(filePath, line, 1); });
+    connect(m_pythonDebugger, &PythonDebugger::stackFramesReceived,
+            m_debuggerPanel, &DebuggerPanel::setStackFrames);
+    connect(m_pythonDebugger, &PythonDebugger::scopesReceived,
+            m_debuggerPanel, &DebuggerPanel::setScopes);
+    connect(m_pythonDebugger, &PythonDebugger::variablesReceived,
+            m_debuggerPanel, &DebuggerPanel::populateVariables);
+    connect(m_debuggerPanel, &DebuggerPanel::frameSelected,
+            m_pythonDebugger, &PythonDebugger::selectFrame);
+    connect(m_debuggerPanel, &DebuggerPanel::expandRequested,
+            m_pythonDebugger, &PythonDebugger::expandVariables);
     connect(m_pythonDebugger, &PythonDebugger::stateChanged, this, [this](bool active, const QString &status) {
         const bool ready = active && status != QStringLiteral("Starting debugger");
         const bool paused = ready && status == QStringLiteral("Paused");
@@ -142,6 +164,11 @@ void MainWindow::setupUi() {
             m_stepOutAction->setEnabled(paused);
         if (m_stopDebuggingAction)
             m_stopDebuggingAction->setEnabled(active);
+        if (active && m_debuggerDock && !m_debuggerDock->isVisible()) {
+            m_debuggerDock->show();
+            if (m_toggleDebuggerPanelAction)
+                m_toggleDebuggerPanelAction->setChecked(true);
+        }
         statusBar()->showMessage(status, 3000);
     });
     connect(m_outputPanel, &OutputPanel::stdinSubmitted, m_buildRunManager, &BuildRunManager::writeStdin);
@@ -322,6 +349,12 @@ void MainWindow::setupMenus() {
     m_toggleOutputPanelAction = viewMenu->addAction("Toggle &Output Panel", QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_O), this, &MainWindow::toggleOutputPanel);
     m_toggleOutputPanelAction->setCheckable(true);
     m_toggleOutputPanelAction->setChecked(false);
+
+    m_toggleDebuggerPanelAction = viewMenu->addAction("Toggle &Debugger Panel");
+    m_toggleDebuggerPanelAction->setCheckable(true);
+    m_toggleDebuggerPanelAction->setChecked(false);
+    connect(m_toggleDebuggerPanelAction, &QAction::toggled, m_debuggerDock, &QDockWidget::setVisible);
+    connect(m_debuggerDock, &QDockWidget::visibilityChanged, m_toggleDebuggerPanelAction, &QAction::setChecked);
 
     m_wordWrapAction = viewMenu->addAction("Toggle &Word Wrap", QKeySequence(Qt::ALT | Qt::Key_Z), this, &MainWindow::toggleWordWrap);
     m_wordWrapAction->setCheckable(true);
