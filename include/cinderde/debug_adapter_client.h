@@ -35,6 +35,7 @@ signals:
     void responseReceived(int requestSeq, const QString &command, bool success,
                           const QJsonObject &body, const QString &message);
     void eventReceived(const QString &event, const QJsonObject &body);
+    void requestReceived(int requestSeq, const QString &command, const QJsonObject &arguments);
     void protocolError(const QString &message);
     void outputReceived(const QString &text, bool standardError);
 
