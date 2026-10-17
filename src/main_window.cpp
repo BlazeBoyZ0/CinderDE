@@ -977,6 +977,141 @@ void MainWindow::showLspDialog() {
     dlg.exec();
 }
 
+void MainWindow::showDebuggerDialog() {
+    const QString workspacePath = m_fileExplorer->workspacePath();
+    if (workspacePath.isEmpty()) {
+        QMessageBox::information(this, "No Workspace",
+                                 "Open a workspace before configuring its debuggers.");
+        return;
+    }
+    DebuggerDialog dialog(workspacePath, this);
+    dialog.exec();
+}
+
+void MainWindow::startDebugging() {
+    const QString workspacePath = m_fileExplorer->workspacePath();
+    if (workspacePath.isEmpty()) {
+        QMessageBox::information(this, "No Workspace",
+                                 "Open a workspace before starting debugging.");
+        return;
+    }
+
+    EditorTab *tab = currentTab();
+    if (!tab) {
+        QMessageBox::information(this, "No File", "Open a Python file before starting debugging.");
+        return;
+    }
+    if (!promptSaveIfModified(tab))
+        return;
+
+    const QString programPath = QFileInfo(tab->filePath()).absoluteFilePath();
+    if (tab->filePath().isEmpty() || !QFileInfo::exists(programPath)) {
+        QMessageBox::information(this, "Save File First",
+                                 "Save the Python file to disk before starting debugging.");
+        return;
+    }
+    if (QFileInfo(programPath).suffix().compare("py", Qt::CaseInsensitive) != 0) {
+        QMessageBox::information(this, "Python Debugging",
+                                 "The v0.9 debugger currently launches Python files (.py).");
+        return;
+    }
+
+    QList<DebuggerConfiguration> configs = DebuggerConfigStore::load(workspacePath);
+    QList<DebuggerConfiguration> enabledConfigs;
+    for (const DebuggerConfiguration &config : configs) {
+        if (config.enabled && config.languageId == QStringLiteral("python"))
+            enabledConfigs.append(config);
+    }
+    if (enabledConfigs.isEmpty()) {
+        QMessageBox::information(this, "No Python Debugger",
+                                 "This workspace has no enabled Python debugger. Add an external adapter in Tools → Debuggers.");
+        showDebuggerDialog();
+        configs = DebuggerConfigStore::load(workspacePath);
+        for (const DebuggerConfiguration &config : configs) {
+            if (config.enabled && config.languageId == QStringLiteral("python"))
+                enabledConfigs.append(config);
+        }
+    }
+    if (enabledConfigs.isEmpty())
+        return;
+
+    QStringList names;
+    for (const DebuggerConfiguration &config : enabledConfigs)
+        names.append(config.name);
+    bool selected = false;
+    const QString selectedName = QInputDialog::getItem(
+        this, "Select Debugger", "Workspace Python debugger:", names, 0, false, &selected);
+    if (!selected)
+        return;
+
+    const auto it = std::find_if(enabledConfigs.cbegin(), enabledConfigs.cend(),
+                                 [&selectedName](const DebuggerConfiguration &config) {
+        return config.name == selectedName;
+    });
+    if (it == enabledConfigs.cend())
+        return;
+    const DebuggerConfiguration config = *it;
+
+    const QString commandPreview = config.executable +
+        (config.arguments.isEmpty() ? QString() : QStringLiteral(" ") + config.arguments.join(QLatin1Char(' ')));
+    const auto trust = QMessageBox::warning(
+        this, "Run Workspace Debugger?",
+        QString("CinderDE is about to execute this external debugger command:\n\n%1\n\n"
+                "Workspace configurations can contain untrusted commands. Only continue if you trust this configuration.")
+            .arg(commandPreview),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (trust != QMessageBox::Yes)
+        return;
+
+    m_outputPanel->clearOutput();
+    m_outputPanel->setWorkingDir(workspacePath);
+    m_outputPanel->setVisible(true);
+    if (m_toggleOutputPanelAction)
+        m_toggleOutputPanelAction->setChecked(true);
+    m_pythonDebugger->start(config, programPath, workspacePath, tab->editor()->breakpointLines());
+}
+
+void MainWindow::toggleBreakpoint() {
+    EditorTab *tab = currentTab();
+    if (!tab) {
+        statusBar()->showMessage("Open a file before setting a breakpoint.", 2500);
+        return;
+    }
+    const int line = tab->editor()->textCursor().blockNumber() + 1;
+    tab->editor()->toggleBreakpoint(line);
+    const bool enabled = tab->editor()->breakpointLines().contains(line);
+    statusBar()->showMessage(QString("%1 breakpoint at line %2")
+                             .arg(enabled ? "Added" : "Removed").arg(line), 2000);
+    if (m_pythonDebugger && m_pythonDebugger->isActive() &&
+        QFileInfo(tab->filePath()).absoluteFilePath() == m_pythonDebugger->programPath()) {
+        m_pythonDebugger->setBreakpoints(tab->editor()->breakpointLines());
+    }
+}
+
+void MainWindow::continueDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->continueExecution();
+}
+
+void MainWindow::pauseDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->pauseExecution();
+}
+
+void MainWindow::stepOverDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->stepOver();
+}
+
+void MainWindow::stepIntoDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->stepInto();
+}
+
+void MainWindow::stepOutDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->stepOut();
+}
+
+void MainWindow::stopDebugging() {
+    if (m_pythonDebugger) m_pythonDebugger->stop();
+}
+
 void MainWindow::showPreferencesDialog() {
     PreferencesDialog dlg(this);
     if (dlg.exec() == QDialog::Accepted) {
