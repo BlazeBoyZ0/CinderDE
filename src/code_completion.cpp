@@ -149,12 +149,22 @@ void CodeCompletionPopup::updateLspSuggestions(const QString &prefix, const QLis
     }
 
     for (const auto &item : items) {
+        // Servers may return broad lists; keep ordinary word completion relevant
+        // to the current prefix. An empty prefix is intentional after '.' or '::'.
+        if (!prefix.isEmpty() && !item.label.startsWith(prefix, Qt::CaseInsensitive)) {
+            continue;
+        }
         QString disp = item.label;
         if (!item.detail.isEmpty()) {
             disp += " (" + item.detail + ")";
         }
         QListWidgetItem *widgetItem = new QListWidgetItem(disp, this);
         widgetItem->setData(Qt::UserRole, item.insertText.isEmpty() ? item.label : item.insertText);
+    }
+
+    if (count() == 0) {
+        hide();
+        return;
     }
 
     setCurrentRow(0);
