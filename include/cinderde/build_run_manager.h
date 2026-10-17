@@ -29,6 +29,7 @@ public:
 
     bool isRunning() const { return m_state != Idle; }
     State state() const { return m_state; }
+    bool isExternalTerminalRunning() const { return m_isExternalTerminal; }
 
     static QString detectTerminalEmulator();
     static QString findCMakeExecutable(const QString &workspacePath, const QString &workingDir);
@@ -53,6 +54,7 @@ private:
     QProcess *m_process;
     State m_state;
     bool m_runPendingAfterBuild;
+    bool m_isExternalTerminal{false};
 
     QString m_currentFilePath;
     QString m_currentWorkspacePath;
