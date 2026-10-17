@@ -38,14 +38,38 @@ CodeEditor::CodeEditor(QWidget *parent)
       m_language(Language::None),
       m_completionPopup(nullptr),
       m_autoCompletionTimer(new QTimer(this)),
+      m_hoverTimer(new QTimer(this)),
       m_completionRequestGeneration(0)
 {
     m_lineNumberArea = new LineNumberArea(this);
     m_completionPopup = new CodeCompletionPopup(this);
+    setMouseTracking(true);
 
     m_autoCompletionTimer->setSingleShot(true);
     m_autoCompletionTimer->setInterval(180);
     connect(m_autoCompletionTimer, &QTimer::timeout, this, &CodeEditor::triggerCompletion);
+    m_hoverTimer->setSingleShot(true);
+    m_hoverTimer->setInterval(500);
+    connect(m_hoverTimer, &QTimer::timeout, this, [this]() {
+        QTextCursor hoverCursor = cursorForPosition(m_hoverPoint);
+        const int line = hoverCursor.blockNumber();
+        const int col = hoverCursor.positionInBlock();
+        LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+        if (!client || !client->isRunning() || !client->capabilities().hoverProvider) return;
+
+        QPointer<CodeEditor> guard(this);
+        const QPoint point = m_hoverPoint;
+        client->requestHover(m_filePath, line, col, [guard, hoverCursor, point](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard || isError || guard->m_hoverPoint != point) return;
+            if (result.isObject()) {
+                LspHover hover = LspHover::fromJson(result.toObject());
+                if (!hover.contents.isEmpty()) {
+                    const QRect rect = guard->cursorRect(hoverCursor);
+                    QToolTip::showText(guard->mapToGlobal(rect.bottomRight()), hover.contents, guard.data());
+                }
+            }
+        });
+    });
 
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
@@ -544,7 +568,10 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         ++m_completionRequestGeneration;
         if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
         handleSmartBackspace(e);
-        if (m_completionPopup) {
+        LspClient *backspaceClient = LspManager::instance().getClientForDocument(m_filePath, false);
+        const bool backspaceHasLsp = backspaceClient && backspaceClient->isRunning()
+            && backspaceClient->capabilities().completionProvider;
+        if (m_completionPopup && !backspaceHasLsp) {
             QTextCursor cursor = textCursor();
             QString line = cursor.block().text().left(cursor.positionInBlock());
             static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
@@ -555,15 +582,8 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             } else {
                 m_completionPopup->updateSuggestions(prefix, m_language);
             }
-
-            // Refresh language-aware suggestions after deleting text too.
-            if (m_autoCompletionTimer) {
-                if (line.endsWith(".") || line.endsWith("::")) {
-                    m_autoCompletionTimer->start(0);
-                } else if (!prefix.isEmpty()) {
-                    m_autoCompletionTimer->start();
-                }
-            }
+        } else if (m_completionPopup) {
+            m_completionPopup->hide();
         }
         return;
     }
@@ -579,8 +599,12 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
 
     QPlainTextEdit::keyPressEvent(e);
 
-    // Update completion popup after standard typing if alphanumeric or underscore typed
-    if (m_completionPopup && !e->text().isEmpty() && (e->text().at(0).isLetterOrNumber() || e->text().at(0) == '_')) {
+    // Keep built-in word suggestions for the lightweight no-LSP mode. When an
+    // LSP is active, let its response own the popup instead of flashing unrelated words.
+    LspClient *activeCompletionClient = LspManager::instance().getClientForDocument(m_filePath, false);
+    const bool hasRunningCompletionLsp = activeCompletionClient && activeCompletionClient->isRunning()
+        && activeCompletionClient->capabilities().completionProvider;
+    if (!hasRunningCompletionLsp && m_completionPopup && !e->text().isEmpty() && (e->text().at(0).isLetterOrNumber() || e->text().at(0) == '_')) {
         QTextCursor cursor = textCursor();
         QString line = cursor.block().text().left(cursor.positionInBlock());
         static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
@@ -640,6 +664,10 @@ void CodeEditor::triggerCompletion() {
     LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
     if (client && client->isRunning()) {
         QPointer<CodeEditor> guard(this);
+        const QString beforeCursor = cursor.block().text().left(cursor.positionInBlock());
+        QString triggerCharacter;
+        if (beforeCursor.endsWith(".")) triggerCharacter = ".";
+        else if (beforeCursor.endsWith("::")) triggerCharacter = ":";
         client->requestCompletion(m_filePath, line, col, [guard, prefix, requestGeneration](const QJsonValue &result, const QJsonObject &, bool isError) {
             if (!guard || guard->m_completionRequestGeneration != requestGeneration) return;
             if (!isError && !result.isNull()) {
@@ -665,7 +693,7 @@ void CodeEditor::triggerCompletion() {
                     guard->m_completionPopup->updateSuggestions(prefix, guard->m_language);
                 }
             }
-        });
+        }, triggerCharacter);
     } else {
         if (m_completionPopup) {
             if (m_languageDef.isValid()) {
@@ -879,6 +907,9 @@ void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
 
 void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
     QPlainTextEdit::mouseMoveEvent(event);
+    m_hoverPoint = event->pos();
+    QToolTip::hideText();
+    if (m_hoverTimer) m_hoverTimer->start();
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {

@@ -442,7 +442,7 @@ void LspClient::notifyDidClose(const QString &filePath) {
     sendNotification("textDocument/didClose", params);
 }
 
-int LspClient::requestCompletion(const QString &filePath, int line, int character, ResponseCallback callback) {
+int LspClient::requestCompletion(const QString &filePath, int line, int character, ResponseCallback callback, const QString &triggerCharacter) {
     if (!isRunning() || !m_capabilities.completionProvider) {
         if (callback) callback(QJsonObject(), QJsonObject(), true);
         return -1;
@@ -453,6 +453,13 @@ int LspClient::requestCompletion(const QString &filePath, int line, int characte
     doc["uri"] = pathToUri(filePath);
     params["textDocument"] = doc;
     params["position"] = LspPosition{line, character}.toJson();
+
+    QJsonObject context;
+    context["triggerKind"] = triggerCharacter.isEmpty() ? 1 : 2;
+    if (!triggerCharacter.isEmpty()) {
+        context["triggerCharacter"] = triggerCharacter;
+    }
+    params["context"] = context;
 
     return sendRequest("textDocument/completion", params, callback);
 }

@@ -27,12 +27,12 @@ CinderDE v0.8 includes an optional LSP client. No language server is bundled or 
 When a configured server supports the relevant capabilities, CinderDE can provide:
 - Language-aware completion, including member completion after trigger characters such as `.`.
 - Diagnostics and editor underlines.
-- Hover information.
+- Hover information, including automatic hover after the mouse pauses over code.
 - Go to definition.
 - Find references.
 - Rename symbol.
 
-Support for individual operations depends on the configured language server and the capabilities it advertises. Automatic LSP completion is debounced while typing to avoid sending a request for every keystroke; trigger characters such as `.` request completion immediately. `Ctrl+Space` remains available to request completion manually.
+Support for individual operations depends on the configured language server and the capabilities it advertises. Automatic LSP completion is debounced while typing to avoid sending a request for every keystroke; trigger characters such as `.` request completion immediately with LSP trigger context. Hover information appears after the mouse pauses over code, and `Ctrl+Space` remains available to request completion manually.
 
 Language servers run as external processes. Their memory use depends on the server and project. For the lightest experience, leave LSP disabled when language intelligence is not needed.
 

@@ -43,7 +43,7 @@ public:
     void notifyDidSave(const QString &filePath, const QString &text = QString());
     void notifyDidClose(const QString &filePath);
 
-    int requestCompletion(const QString &filePath, int line, int character, ResponseCallback callback);
+    int requestCompletion(const QString &filePath, int line, int character, ResponseCallback callback, const QString &triggerCharacter = QString());
     int requestHover(const QString &filePath, int line, int character, ResponseCallback callback);
     int requestDefinition(const QString &filePath, int line, int character, ResponseCallback callback);
     int requestReferences(const QString &filePath, int line, int character, ResponseCallback callback);
