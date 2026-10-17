@@ -186,7 +186,6 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     }
 
     m_programPath = programInfo.absoluteFilePath();
-    m_workspacePath = QDir(workspacePath).absolutePath();
     m_workingDirectory = config.workingDirectory.trimmed().isEmpty()
         ? (workspacePath.isEmpty() ? programInfo.absolutePath() : QDir(workspacePath).absolutePath())
         : (QDir::isAbsolutePath(config.workingDirectory)
