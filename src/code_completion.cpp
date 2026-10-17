@@ -177,6 +177,7 @@ void CodeCompletionPopup::positionPopup() {
 void CodeCompletionPopup::insertCurrentSuggestion() {
     if (!m_editor || !currentItem()) return;
 
+    m_editor->cancelPendingCompletion();
     QVariant insertData = currentItem()->data(Qt::UserRole);
     QString selectedText = insertData.isValid() ? insertData.toString() : currentItem()->text();
     QTextCursor cursor = m_editor->textCursor();
@@ -211,6 +212,7 @@ bool CodeCompletionPopup::eventFilter(QObject *obj, QEvent *event) {
                 insertCurrentSuggestion();
                 return true;
             } else if (keyEvent->key() == Qt::Key_Escape) {
+                m_editor->cancelPendingCompletion();
                 hide();
                 return true;
             }

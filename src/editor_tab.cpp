@@ -36,10 +36,16 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent),
       m_language(Language::None),
-      m_completionPopup(nullptr)
+      m_completionPopup(nullptr),
+      m_autoCompletionTimer(new QTimer(this)),
+      m_completionRequestGeneration(0)
 {
     m_lineNumberArea = new LineNumberArea(this);
     m_completionPopup = new CodeCompletionPopup(this);
+
+    m_autoCompletionTimer->setSingleShot(true);
+    m_autoCompletionTimer->setInterval(180);
+    connect(m_autoCompletionTimer, &QTimer::timeout, this, &CodeEditor::triggerCompletion);
 
     connect(this, &CodeEditor::blockCountChanged, this, &CodeEditor::updateLineNumberAreaWidth);
     connect(this, &CodeEditor::updateRequest, this, &CodeEditor::updateLineNumberArea);
@@ -527,12 +533,16 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
     }
 
     if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        ++m_completionRequestGeneration;
+        if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
         handleSmartEnter();
         if (m_completionPopup) m_completionPopup->hide();
         return;
     }
 
     if (e->key() == Qt::Key_Backspace) {
+        ++m_completionRequestGeneration;
+        if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
         handleSmartBackspace(e);
         if (m_completionPopup) {
             QTextCursor cursor = textCursor();
@@ -545,12 +555,23 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             } else {
                 m_completionPopup->updateSuggestions(prefix, m_language);
             }
+
+            // Refresh language-aware suggestions after deleting text too.
+            if (m_autoCompletionTimer) {
+                if (line.endsWith(".") || line.endsWith("::")) {
+                    m_autoCompletionTimer->start(0);
+                } else if (!prefix.isEmpty()) {
+                    m_autoCompletionTimer->start();
+                }
+            }
         }
         return;
     }
 
     if (e->modifiers() == Qt::NoModifier || e->modifiers() == Qt::ShiftModifier) {
         if (handleBracketPairing(e)) {
+            ++m_completionRequestGeneration;
+            if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
             if (m_completionPopup) m_completionPopup->hide();
             return;
         }
@@ -577,9 +598,36 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
     } else if (m_completionPopup && e->key() != Qt::Key_Up && e->key() != Qt::Key_Down) {
         m_completionPopup->hide();
     }
+
+    // Invalidate any in-flight completion as soon as the editor changes, so
+    // an older response cannot replace suggestions for the current cursor.
+    ++m_completionRequestGeneration;
+
+    // Debounce ordinary typing so language servers are not queried for every
+    // keystroke. Trigger characters such as '.' request completion immediately.
+    if (m_autoCompletionTimer && !e->text().isEmpty()) {
+        const QString typed = e->text();
+        const QChar ch = typed.back();
+        if (ch.isLetterOrNumber() || ch == '_') {
+            m_autoCompletionTimer->start();
+        } else if (ch == '.') {
+            m_autoCompletionTimer->start(0);
+        } else if (ch == ':') {
+            const QString line = textCursor().block().text().left(textCursor().positionInBlock());
+            if (line.endsWith("::")) {
+                m_autoCompletionTimer->start(0);
+            } else {
+                m_autoCompletionTimer->stop();
+            }
+        } else {
+            m_autoCompletionTimer->stop();
+        }
+    }
 }
 
 void CodeEditor::triggerCompletion() {
+    if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
+    const int requestGeneration = ++m_completionRequestGeneration;
     QTextCursor cursor = textCursor();
     int line = cursor.blockNumber();
     int col = cursor.columnNumber();
@@ -592,8 +640,8 @@ void CodeEditor::triggerCompletion() {
     LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
     if (client && client->isRunning()) {
         QPointer<CodeEditor> guard(this);
-        client->requestCompletion(m_filePath, line, col, [guard, prefix](const QJsonValue &result, const QJsonObject &, bool isError) {
-            if (!guard) return;
+        client->requestCompletion(m_filePath, line, col, [guard, prefix, requestGeneration](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard || guard->m_completionRequestGeneration != requestGeneration) return;
             if (!isError && !result.isNull()) {
                 QList<LspCompletionItem> items;
                 QJsonArray itemsArray;
@@ -627,6 +675,11 @@ void CodeEditor::triggerCompletion() {
             }
         }
     }
+}
+
+void CodeEditor::cancelPendingCompletion() {
+    ++m_completionRequestGeneration;
+    if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
 }
 
 void CodeEditor::triggerHover() {
