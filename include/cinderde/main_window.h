@@ -8,7 +8,6 @@
 #include <QToolBar>
 #include <QAction>
 #include <QMenu>
-#include <QSet>
 #include "cinderde/python_debugger.h"
 #include "cinderde/editor_tab.h"
 #include "cinderde/file_explorer.h"
@@ -99,7 +98,6 @@ private:
     OutputPanel *m_outputPanel;
     BuildRunManager *m_buildRunManager;
     PythonDebugger *m_pythonDebugger;
-    QSet<int> m_breakpointLines;
 
     // Status bar labels
     QLabel *m_statusCursorLabel;
