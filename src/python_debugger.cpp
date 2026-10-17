@@ -27,6 +27,8 @@ PythonDebugger::PythonDebugger(QObject *parent)
     });
     connect(m_client, &DebugAdapterClient::responseReceived, this,
             [this](int requestSeq, const QString &command, bool success, const QJsonObject &body, const QString &message) {
+        if (m_stopping && command != QStringLiteral("disconnect"))
+            return;
         if (!success) {
             reportResponseFailure(command, message);
             if (command == QStringLiteral("launch") || command == QStringLiteral("initialize")) {
@@ -102,6 +104,8 @@ PythonDebugger::PythonDebugger(QObject *parent)
 
     connect(m_client, &DebugAdapterClient::eventReceived, this,
             [this](const QString &event, const QJsonObject &body) {
+        if (m_stopping && event != QStringLiteral("terminated"))
+            return;
         if (event == QStringLiteral("initialized")) {
             m_initialized = true;
             sendBreakpoints();
@@ -290,6 +294,7 @@ void PythonDebugger::stop()
         return;
     }
     m_stopping = true;
+    emit stateChanged(true, QStringLiteral("Stopping debugger"));
     if (m_initialized) {
         m_client->sendRequest(QStringLiteral("disconnect"), QJsonObject{
             {QStringLiteral("restart"), false},
