@@ -42,6 +42,7 @@ QList<DebuggerConfiguration> DebuggerConfigStore::load(const QString &workspaceP
         config.name = object.value(QStringLiteral("name")).toString();
         config.languageId = object.value(QStringLiteral("languageId")).toString();
         config.executable = object.value(QStringLiteral("executable")).toString();
+        config.runtimeExecutable = object.value(QStringLiteral("runtimeExecutable")).toString();
         config.workingDirectory = object.value(QStringLiteral("workingDirectory")).toString();
         config.enabled = object.value(QStringLiteral("enabled")).toBool(true);
         for (const QJsonValue &argument : object.value(QStringLiteral("arguments")).toArray()) {
@@ -75,6 +76,7 @@ bool DebuggerConfigStore::save(const QString &workspacePath,
             {QStringLiteral("name"), config.name},
             {QStringLiteral("languageId"), config.languageId},
             {QStringLiteral("executable"), config.executable},
+            {QStringLiteral("runtimeExecutable"), config.runtimeExecutable},
             {QStringLiteral("arguments"), arguments},
             {QStringLiteral("workingDirectory"), config.workingDirectory},
             {QStringLiteral("enabled"), config.enabled}
