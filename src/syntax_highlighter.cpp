@@ -8,12 +8,14 @@ SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
       m_language(Language::None),
       m_theme(SyntaxTheme::darkTheme())
 {
-    setupCRules();
-    setupCppRules();
-    setupPythonRules();
 }
 
 Language SyntaxHighlighter::languageFromExtension(const QString &extension) {
+    LanguageDefinition def = LanguageRegistry::instance().definitionForExtension(extension);
+    if (def.id == "c") return Language::C;
+    if (def.id == "cpp") return Language::Cpp;
+    if (def.id == "python") return Language::Python;
+
     QString ext = extension.toLower();
     if (ext.startsWith('.')) {
         ext = ext.mid(1);
@@ -30,191 +32,120 @@ Language SyntaxHighlighter::languageFromExtension(const QString &extension) {
     return Language::None;
 }
 
+LanguageDefinition SyntaxHighlighter::definitionFromExtension(const QString &extension) {
+    return LanguageRegistry::instance().definitionForExtension(extension);
+}
+
 void SyntaxHighlighter::setLanguage(Language lang) {
-    if (m_language != lang) {
-        m_language = lang;
-        rehighlight();
+    m_language = lang;
+    if (lang == Language::C) {
+        setLanguageDefinition(LanguageRegistry::instance().definitionForId("c"));
+    } else if (lang == Language::Cpp) {
+        setLanguageDefinition(LanguageRegistry::instance().definitionForId("cpp"));
+    } else if (lang == Language::Python) {
+        setLanguageDefinition(LanguageRegistry::instance().definitionForId("python"));
+    } else {
+        setLanguageDefinition(LanguageDefinition());
     }
 }
 
-void SyntaxHighlighter::setupCRules() {
-    m_cRules.clear();
-    m_cTypeRules.clear();
+void SyntaxHighlighter::setLanguageDefinition(const LanguageDefinition &def) {
+    m_languageDef = def;
 
-    // C Control Flow / Storage Keywords
-    QStringList keywords = {
-        "auto", "break", "case", "const", "continue", "default", "do",
-        "else", "enum", "extern", "for", "goto", "if", "inline", "register",
-        "restrict", "return", "sizeof", "static", "struct", "switch", "typedef",
-        "union", "volatile", "while", "_Alignas", "_Alignof", "_Atomic",
-        "_Generic", "_Noreturn", "_Static_assert", "_Thread_local", "NULL", "nullptr"
-    };
+    if (def.id == "c") m_language = Language::C;
+    else if (def.id == "cpp") m_language = Language::Cpp;
+    else if (def.id == "python") m_language = Language::Python;
+    else m_language = Language::None;
 
-    for (const QString &keyword : keywords) {
+    rebuildRulesFromDefinition();
+    rehighlight();
+}
+
+void SyntaxHighlighter::rebuildRulesFromDefinition() {
+    m_rules.clear();
+    m_typeRules.clear();
+
+    if (!m_languageDef.isValid()) return;
+
+    // Keywords
+    for (const QString &keyword : m_languageDef.keywords) {
         HighlightingRule rule;
         rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(keyword));
         rule.format = m_theme.keywordFormat;
-        m_cRules.append(rule);
+        m_rules.append(rule);
     }
 
-    // C Types & Built-in Primitive Types
-    QStringList cTypes = {
-        "char", "double", "float", "int", "long", "short", "signed",
-        "unsigned", "void", "_Bool", "_Complex", "_Imaginary", "bool",
-        "true", "false", "size_t", "ssize_t", "int8_t", "int16_t", "int32_t", "int64_t",
-        "uint8_t", "uint16_t", "uint32_t", "uint64_t", "intptr_t", "uintptr_t",
-        "ptrdiff_t", "FILE", "time_t"
-    };
-
-    for (const QString &type : cTypes) {
+    // Types
+    for (const QString &type : m_languageDef.types) {
         HighlightingRule rule;
         rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(type));
         rule.format = m_theme.typeFormat;
-        m_cTypeRules.append(rule);
+        m_typeRules.append(rule);
     }
 
-    // Preprocessor Directives
-    HighlightingRule prepRule;
-    prepRule.pattern = QRegularExpression(R"(^\s*#\s*[a-zA-Z_]\w*)");
-    prepRule.format = m_theme.preprocessorFormat;
-    m_cRules.append(prepRule);
-
-    // Functions
-    HighlightingRule funcRule;
-    funcRule.pattern = QRegularExpression(R"(\b[a-zA-Z_]\w*(?=\s*\())");
-    funcRule.format = m_theme.functionFormat;
-    m_cRules.append(funcRule);
-
-    // Numbers (hex, octal, binary, decimal, floating point with suffixes)
-    HighlightingRule numRule;
-    numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)[uUlLfF]*\b)");
-    numRule.format = m_theme.numberFormat;
-    m_cRules.append(numRule);
-
-    // Operators and Punctuation
-    HighlightingRule opRule;
-    opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\?]+)");
-    opRule.format = m_theme.operatorFormat;
-    m_cRules.append(opRule);
-}
-
-void SyntaxHighlighter::setupCppRules() {
-    setupCRules();
-    m_cppRules = m_cRules;
-    m_cppTypeRules = m_cTypeRules;
-
-    // Additional C++ Keywords
-    QStringList cppKeywords = {
-        "alignas", "alignof", "and", "and_eq", "asm", "bitand", "bitor",
-        "catch", "class", "compl", "concept", "consteval", "constexpr",
-        "constinit", "const_cast", "decltype", "delete", "dynamic_cast",
-        "explicit", "export", "friend", "mutable", "namespace", "new",
-        "noexcept", "not", "not_eq", "operator", "or", "or_eq", "private",
-        "protected", "public", "reinterpret_cast", "requires", "static_assert",
-        "static_cast", "template", "this", "thread_local", "throw", "try",
-        "typeid", "typename", "using", "virtual", "xor", "xor_eq",
-        "co_await", "co_return", "co_yield", "std", "override", "final"
-    };
-
-    for (const QString &keyword : cppKeywords) {
-        HighlightingRule rule;
-        rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(keyword));
-        rule.format = m_theme.keywordFormat;
-        m_cppRules.append(rule);
-    }
-
-    // Additional C++ Types
-    QStringList cppTypes = {
-        "char16_t", "char32_t", "char8_t", "wchar_t",
-        "string", "wstring", "u16string", "u32string", "string_view",
-        "vector", "map", "set", "unordered_map", "unordered_set",
-        "shared_ptr", "unique_ptr", "weak_ptr", "optional", "variant",
-        "any", "pair", "tuple", "function"
-    };
-
-    for (const QString &type : cppTypes) {
-        HighlightingRule rule;
-        rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(type));
-        rule.format = m_theme.typeFormat;
-        m_cppTypeRules.append(rule);
-    }
-}
-
-void SyntaxHighlighter::setupPythonRules() {
-    m_pythonRules.clear();
-    m_pythonBuiltinRules.clear();
-
-    // Python Keywords
-    QStringList keywords = {
-        "False", "None", "True", "and", "as", "assert", "async", "await",
-        "break", "class", "continue", "def", "del", "elif", "else", "except",
-        "finally", "for", "from", "global", "if", "import", "in", "is",
-        "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
-        "while", "with", "yield"
-    };
-
-    for (const QString &keyword : keywords) {
-        HighlightingRule rule;
-        rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(keyword));
-        rule.format = m_theme.keywordFormat;
-        m_pythonRules.append(rule);
-    }
-
-    // Python Builtins & Types
-    QStringList builtins = {
-        "abs", "all", "any", "ascii", "bin", "bool", "breakpoint", "bytearray",
-        "bytes", "callable", "chr", "classmethod", "compile", "complex", "delattr",
-        "dict", "dir", "divmod", "enumerate", "eval", "exec", "filter", "float",
-        "format", "frozenset", "getattr", "globals", "hasattr", "hash", "help",
-        "hex", "id", "input", "int", "isinstance", "issubclass", "iter", "len",
-        "list", "locals", "map", "max", "memoryview", "min", "next", "object",
-        "oct", "open", "ord", "pow", "print", "property", "range", "repr",
-        "reversed", "round", "set", "setattr", "slice", "sorted", "staticmethod",
-        "str", "sum", "super", "tuple", "type", "vars", "zip", "self"
-    };
-
-    for (const QString &builtin : builtins) {
+    // Builtins
+    for (const QString &builtin : m_languageDef.builtins) {
         HighlightingRule rule;
         rule.pattern = QRegularExpression(QString(R"(\b%1\b)").arg(builtin));
         rule.format = m_theme.typeFormat;
-        m_pythonBuiltinRules.append(rule);
+        m_typeRules.append(rule);
+    }
+
+    // Preprocessor Directives (C/C++ or languages with preprocessor)
+    if (m_languageDef.id == "c" || m_languageDef.id == "cpp") {
+        HighlightingRule prepRule;
+        prepRule.pattern = QRegularExpression(R"(^\s*#\s*[a-zA-Z_]\w*)");
+        prepRule.format = m_theme.preprocessorFormat;
+        m_rules.append(prepRule);
     }
 
     // Decorators (@decorator_name)
-    HighlightingRule decRule;
-    decRule.pattern = QRegularExpression(R"(@[a-zA-Z_]\w*)");
-    decRule.format = m_theme.decoratorFormat;
-    m_pythonRules.append(decRule);
+    if (m_languageDef.id == "python") {
+        HighlightingRule decRule;
+        decRule.pattern = QRegularExpression(R"(@[a-zA-Z_]\w*)");
+        decRule.format = m_theme.decoratorFormat;
+        m_rules.append(decRule);
+    }
 
     // Functions
     HighlightingRule funcRule;
     funcRule.pattern = QRegularExpression(R"(\b[a-zA-Z_]\w*(?=\s*\())");
     funcRule.format = m_theme.functionFormat;
-    m_pythonRules.append(funcRule);
+    m_rules.append(funcRule);
 
     // Numbers
     HighlightingRule numRule;
-    numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)\b)");
+    if (m_languageDef.id == "python") {
+        numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)\b)");
+    } else {
+        numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)[uUlLfF]*\b)");
+    }
     numRule.format = m_theme.numberFormat;
-    m_pythonRules.append(numRule);
+    m_rules.append(numRule);
 
     // Operators
     HighlightingRule opRule;
-    opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\:]+)");
+    if (m_languageDef.id == "python") {
+        opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\:]+)");
+    } else {
+        opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\?]+)");
+    }
     opRule.format = m_theme.operatorFormat;
-    m_pythonRules.append(opRule);
+    m_rules.append(opRule);
 }
 
 void SyntaxHighlighter::highlightBlock(const QString &text) {
-    if (m_language == Language::None) {
+    if (!m_languageDef.isValid()) {
         setCurrentBlockState(0);
         return;
     }
 
-    if (m_language == Language::C || m_language == Language::Cpp) {
+    if (m_languageDef.id == "c" || m_languageDef.id == "cpp") {
         highlightCLikeBlock(text);
-    } else if (m_language == Language::Python) {
+    } else if (m_languageDef.id == "python") {
         highlightPythonBlock(text);
+    } else {
+        highlightGenericBlock(text);
     }
 }
 
@@ -324,14 +255,9 @@ void SyntaxHighlighter::highlightCLikeBlock(const QString &text) {
 
     setCurrentBlockState(state);
 
-    // Apply C/C++ regex rules only to unmasked text
-    const auto &rules = (m_language == Language::Cpp) ? m_cppRules : m_cRules;
-    const auto &typeRules = (m_language == Language::Cpp) ? m_cppTypeRules : m_cTypeRules;
+    applyMaskedRules(text, m_rules, isMasked);
+    applyMaskedRules(text, m_typeRules, isMasked);
 
-    applyMaskedRules(text, rules, isMasked);
-    applyMaskedRules(text, typeRules, isMasked);
-
-    // Finally apply string and comment formatting over masked regions
     for (const auto &span : stringCommentSpans) {
         setFormat(span.start, span.length, span.format);
     }
@@ -457,11 +383,105 @@ void SyntaxHighlighter::highlightPythonBlock(const QString &text) {
 
     setCurrentBlockState(state);
 
-    // Apply Python rules to unmasked text
-    applyMaskedRules(text, m_pythonRules, isMasked);
-    applyMaskedRules(text, m_pythonBuiltinRules, isMasked);
+    applyMaskedRules(text, m_rules, isMasked);
+    applyMaskedRules(text, m_typeRules, isMasked);
 
-    // Apply string and comment formatting over masked regions
+    for (const auto &span : stringCommentSpans) {
+        setFormat(span.start, span.length, span.format);
+    }
+}
+
+void SyntaxHighlighter::highlightGenericBlock(const QString &text) {
+    int length = text.length();
+    QVector<bool> isMasked(length, false);
+    struct FormatSpan {
+        int start;
+        int length;
+        QTextCharFormat format;
+    };
+    QVector<FormatSpan> stringCommentSpans;
+
+    int state = previousBlockState();
+    if (state < 0) state = 0;
+
+    QString lineComment = m_languageDef.comments.linePrefix;
+    QString blockStart = m_languageDef.comments.blockStart;
+    QString blockEnd = m_languageDef.comments.blockEnd;
+    bool hasBlockComments = !blockStart.isEmpty() && !blockEnd.isEmpty();
+
+    int i = 0;
+
+    while (i < length) {
+        if (state == 1 && hasBlockComments) { // Inside multiline block comment
+            int endIdx = text.indexOf(blockEnd, i);
+            if (endIdx != -1) {
+                int commentLen = (endIdx + blockEnd.length()) - i;
+                for (int k = i; k < endIdx + blockEnd.length(); ++k) isMasked[k] = true;
+                stringCommentSpans.append({i, commentLen, m_theme.commentFormat});
+                i = endIdx + blockEnd.length();
+                state = 0;
+            } else {
+                for (int k = i; k < length; ++k) isMasked[k] = true;
+                stringCommentSpans.append({i, length - i, m_theme.commentFormat});
+                i = length;
+            }
+        } else { // Normal mode
+            // Check single line comment
+            if (!lineComment.isEmpty() && text.mid(i).startsWith(lineComment)) {
+                for (int k = i; k < length; ++k) isMasked[k] = true;
+                stringCommentSpans.append({i, length - i, m_theme.commentFormat});
+                break;
+            }
+
+            // Check start of block comment
+            if (hasBlockComments && text.mid(i).startsWith(blockStart)) {
+                state = 1;
+                int endIdx = text.indexOf(blockEnd, i + blockStart.length());
+                if (endIdx != -1) {
+                    int commentLen = (endIdx + blockEnd.length()) - i;
+                    for (int k = i; k < endIdx + blockEnd.length(); ++k) isMasked[k] = true;
+                    stringCommentSpans.append({i, commentLen, m_theme.commentFormat});
+                    i = endIdx + blockEnd.length();
+                    state = 0;
+                } else {
+                    for (int k = i; k < length; ++k) isMasked[k] = true;
+                    stringCommentSpans.append({i, length - i, m_theme.commentFormat});
+                    i = length;
+                }
+                continue;
+            }
+
+            // String or Char literal ('...' or "...")
+            QChar ch = text.at(i);
+            if (ch == '"' || ch == '\'') {
+                QChar quote = ch;
+                int start = i;
+                i++;
+                while (i < length) {
+                    if (text.at(i) == '\\') {
+                        i += 2; // skip escaped character
+                        continue;
+                    }
+                    if (text.at(i) == quote) {
+                        i++; // consume closing quote
+                        break;
+                    }
+                    i++;
+                }
+                for (int k = start; k < i && k < length; ++k) isMasked[k] = true;
+                stringCommentSpans.append({start, i - start, m_theme.stringFormat});
+                continue;
+            }
+
+            i++;
+        }
+    }
+
+    setCurrentBlockState(state);
+
+    applyMaskedRules(text, m_rules, isMasked);
+    applyMaskedRules(text, m_typeRules, isMasked);
+
     for (const auto &span : stringCommentSpans) {
         setFormat(span.start, span.length, span.format);
     }
