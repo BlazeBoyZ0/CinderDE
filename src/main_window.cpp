@@ -7,6 +7,7 @@
 #include "cinderde/debugger_dialog.h"
 #include "cinderde/debugger_config.h"
 #include <QInputDialog>
+#include <algorithm>
 #include "cinderde/lsp_manager.h"
 #include <QMenuBar>
 #include <QMenu>
@@ -27,16 +28,16 @@ namespace CinderDE {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      m_recentWorkspacesMenu(nullptr),
-      m_sessionRestoreAction(nullptr),
       m_pythonDebugger(nullptr),
+      m_sessionRestoreAction(nullptr),
       m_startDebuggingAction(nullptr),
       m_continueDebuggingAction(nullptr),
       m_pauseDebuggingAction(nullptr),
       m_stepOverAction(nullptr),
       m_stepIntoAction(nullptr),
       m_stepOutAction(nullptr),
-      m_stopDebuggingAction(nullptr)
+      m_stopDebuggingAction(nullptr),
+      m_recentWorkspacesMenu(nullptr)
 {
     setObjectName("main_window");
     setupUi();
