@@ -125,18 +125,21 @@ void MainWindow::setupUi() {
     connect(m_pythonDebugger, &PythonDebugger::currentLineChanged, this,
             [this](const QString &filePath, int line) { navigateToDiagnostic(filePath, line, 1); });
     connect(m_pythonDebugger, &PythonDebugger::stateChanged, this, [this](bool active, const QString &status) {
+        const bool ready = active && status != QStringLiteral("Starting debugger");
+        const bool paused = ready && status == QStringLiteral("Paused");
+        const bool running = ready && (status == QStringLiteral("Running") || status == QStringLiteral("Debugging"));
         if (m_startDebuggingAction)
             m_startDebuggingAction->setEnabled(!active);
         if (m_continueDebuggingAction)
-            m_continueDebuggingAction->setEnabled(active);
+            m_continueDebuggingAction->setEnabled(paused);
         if (m_pauseDebuggingAction)
-            m_pauseDebuggingAction->setEnabled(active);
+            m_pauseDebuggingAction->setEnabled(running);
         if (m_stepOverAction)
-            m_stepOverAction->setEnabled(active);
+            m_stepOverAction->setEnabled(paused);
         if (m_stepIntoAction)
-            m_stepIntoAction->setEnabled(active);
+            m_stepIntoAction->setEnabled(paused);
         if (m_stepOutAction)
-            m_stepOutAction->setEnabled(active);
+            m_stepOutAction->setEnabled(paused);
         if (m_stopDebuggingAction)
             m_stopDebuggingAction->setEnabled(active);
         statusBar()->showMessage(status, 3000);
