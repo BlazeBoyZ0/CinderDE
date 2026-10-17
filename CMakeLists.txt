@@ -32,6 +32,8 @@ set(SOURCES
     src/lsp_manager.cpp
     src/lsp_dialog.cpp
     src/debug_adapter_client.cpp
+    src/debugger_config.cpp
+    src/debugger_dialog.cpp
     languages.qrc
 )
 
@@ -56,6 +58,8 @@ set(HEADERS
     include/cinderde/lsp_manager.h
     include/cinderde/lsp_dialog.h
     include/cinderde/debug_adapter_client.h
+    include/cinderde/debugger_config.h
+    include/cinderde/debugger_dialog.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
