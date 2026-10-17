@@ -1,5 +1,6 @@
 #include "cinderde/code_completion.h"
 #include "cinderde/editor_tab.h"
+#include "cinderde/lsp_types.h"
 #include <QRegularExpression>
 #include <QTextCursor>
 #include <QKeyEvent>
@@ -138,6 +139,29 @@ void CodeCompletionPopup::updateSuggestions(const QString &prefix, const Languag
     show();
 }
 
+void CodeCompletionPopup::updateLspSuggestions(const QString &prefix, const QList<LspCompletionItem> &items) {
+    m_currentPrefix = prefix;
+    clear();
+
+    if (items.isEmpty()) {
+        hide();
+        return;
+    }
+
+    for (const auto &item : items) {
+        QString disp = item.label;
+        if (!item.detail.isEmpty()) {
+            disp += " (" + item.detail + ")";
+        }
+        QListWidgetItem *widgetItem = new QListWidgetItem(disp, this);
+        widgetItem->setData(Qt::UserRole, item.insertText.isEmpty() ? item.label : item.insertText);
+    }
+
+    setCurrentRow(0);
+    positionPopup();
+    show();
+}
+
 void CodeCompletionPopup::positionPopup() {
     if (!m_editor) return;
 
@@ -153,7 +177,8 @@ void CodeCompletionPopup::positionPopup() {
 void CodeCompletionPopup::insertCurrentSuggestion() {
     if (!m_editor || !currentItem()) return;
 
-    QString selectedText = currentItem()->text();
+    QVariant insertData = currentItem()->data(Qt::UserRole);
+    QString selectedText = insertData.isValid() ? insertData.toString() : currentItem()->text();
     QTextCursor cursor = m_editor->textCursor();
 
     cursor.beginEditBlock();

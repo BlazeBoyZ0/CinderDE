@@ -69,9 +69,15 @@ public:
     QString terminalCommand() const;
     void setTerminalCommand(const QString &cmd);
 
+    // LSP Server Configurations
+    QList<struct LspServerConfig> lspServerConfigs() const;
+    void setLspServerConfigs(const QList<struct LspServerConfig> &configs);
+    void saveLspServerConfig(const struct LspServerConfig &config);
+    void removeLspServerConfig(const QString &id);
+
 private:
     Preferences();
-    QSettings m_settings;
+    mutable QSettings m_settings;
 };
 
 } // namespace CinderDE

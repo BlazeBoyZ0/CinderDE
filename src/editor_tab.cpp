@@ -1,6 +1,8 @@
 #include "cinderde/editor_tab.h"
 #include "cinderde/code_completion.h"
 #include "cinderde/preferences.h"
+#include "cinderde/lsp_manager.h"
+#include "cinderde/lsp_types.h"
 #include <QPainter>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -10,6 +12,11 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QShortcut>
+#include <QToolTip>
+#include <QMenu>
+#include <QInputDialog>
+#include <QApplication>
+#include <QPointer>
 
 namespace CinderDE {
 
@@ -103,7 +110,44 @@ void CodeEditor::highlightCurrentLineAndBracket() {
         highlightMatchingBracket(extraSelections);
     }
 
+    // Add diagnostic underlines
+    for (const auto &diag : m_diagnostics) {
+        QTextBlock startBlock = document()->findBlockByLineNumber(diag.range.start.line);
+        QTextBlock endBlock = document()->findBlockByLineNumber(diag.range.end.line);
+
+        if (startBlock.isValid() && endBlock.isValid()) {
+            QTextEdit::ExtraSelection sel;
+            QTextCharFormat fmt;
+
+            QColor color = (diag.severity == 1) ? QColor("#ff4444") :
+                          (diag.severity == 2) ? QColor("#ffaa00") : QColor("#44aaff");
+
+            fmt.setUnderlineStyle(QTextCharFormat::WaveUnderline);
+            fmt.setUnderlineColor(color);
+            fmt.setToolTip(diag.message);
+
+            sel.format = fmt;
+            sel.cursor = textCursor();
+
+            int startPos = startBlock.position() + qMin(diag.range.start.character, startBlock.length() - 1);
+            int endPos = endBlock.position() + qMin(diag.range.end.character, endBlock.length() - 1);
+
+            if (startPos == endPos && startPos < document()->characterCount()) {
+                endPos = startPos + 1;
+            }
+
+            sel.cursor.setPosition(startPos);
+            sel.cursor.setPosition(endPos, QTextCursor::KeepAnchor);
+            extraSelections.append(sel);
+        }
+    }
+
     setExtraSelections(extraSelections);
+}
+
+void CodeEditor::setDiagnostics(const QList<LspDiagnostic> &diagnostics) {
+    m_diagnostics = diagnostics;
+    highlightCurrentLineAndBracket();
 }
 
 void CodeEditor::highlightMatchingBracket(QList<QTextEdit::ExtraSelection> &extraSelections) {
@@ -465,20 +509,20 @@ void CodeEditor::toggleComment() {
 }
 
 void CodeEditor::keyPressEvent(QKeyEvent *e) {
-    // Manual trigger Ctrl+Space for completion
+    if (e->key() == Qt::Key_F12 && e->modifiers() == Qt::NoModifier) {
+        triggerGoToDefinition();
+        return;
+    }
+    if (e->key() == Qt::Key_F12 && e->modifiers() == Qt::ShiftModifier) {
+        triggerFindReferences();
+        return;
+    }
+    if (e->key() == Qt::Key_F2 && e->modifiers() == Qt::NoModifier) {
+        triggerRename();
+        return;
+    }
     if ((e->modifiers() & Qt::ControlModifier) && e->key() == Qt::Key_Space) {
-        QTextCursor cursor = textCursor();
-        QString line = cursor.block().text().left(cursor.positionInBlock());
-        static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
-        auto match = wordRx.match(line);
-        QString prefix = match.hasMatch() ? match.captured(0) : "";
-        if (m_completionPopup) {
-            if (m_languageDef.isValid()) {
-                m_completionPopup->updateSuggestions(prefix, m_languageDef);
-            } else {
-                m_completionPopup->updateSuggestions(prefix, m_language);
-            }
-        }
+        triggerCompletion();
         return;
     }
 
@@ -533,6 +577,255 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
     } else if (m_completionPopup && e->key() != Qt::Key_Up && e->key() != Qt::Key_Down) {
         m_completionPopup->hide();
     }
+}
+
+void CodeEditor::triggerCompletion() {
+    QTextCursor cursor = textCursor();
+    int line = cursor.blockNumber();
+    int col = cursor.columnNumber();
+
+    QString lineText = cursor.block().text().left(cursor.positionInBlock());
+    static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
+    auto match = wordRx.match(lineText);
+    QString prefix = match.hasMatch() ? match.captured(0) : "";
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    if (client && client->isRunning()) {
+        QPointer<CodeEditor> guard(this);
+        client->requestCompletion(m_filePath, line, col, [guard, prefix](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard) return;
+            if (!isError && !result.isNull()) {
+                QList<LspCompletionItem> items;
+                QJsonArray itemsArray;
+                if (result.isObject() && result.toObject().contains("items") && result.toObject().value("items").isArray()) {
+                    itemsArray = result.toObject().value("items").toArray();
+                } else if (result.isArray()) {
+                    itemsArray = result.toArray();
+                }
+                for (const QJsonValue &v : itemsArray) {
+                    items.append(LspCompletionItem::fromJson(v.toObject()));
+                }
+                if (!items.isEmpty() && guard->m_completionPopup) {
+                    guard->m_completionPopup->updateLspSuggestions(prefix, items);
+                    return;
+                }
+            }
+            if (guard->m_completionPopup) {
+                if (guard->m_languageDef.isValid()) {
+                    guard->m_completionPopup->updateSuggestions(prefix, guard->m_languageDef);
+                } else {
+                    guard->m_completionPopup->updateSuggestions(prefix, guard->m_language);
+                }
+            }
+        });
+    } else {
+        if (m_completionPopup) {
+            if (m_languageDef.isValid()) {
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
+            } else {
+                m_completionPopup->updateSuggestions(prefix, m_language);
+            }
+        }
+    }
+}
+
+void CodeEditor::triggerHover() {
+    QTextCursor cursor = textCursor();
+    int line = cursor.blockNumber();
+    int col = cursor.columnNumber();
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    if (client && client->isRunning()) {
+        QPointer<CodeEditor> guard(this);
+        client->requestHover(m_filePath, line, col, [guard](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard) return;
+            if (!isError && result.isObject()) {
+                LspHover hover = LspHover::fromJson(result.toObject());
+                if (!hover.contents.isEmpty()) {
+                    QToolTip::showText(guard->mapToGlobal(guard->cursorRect().bottomRight()), hover.contents, guard.data());
+                }
+            }
+        });
+    }
+}
+
+void CodeEditor::triggerGoToDefinition() {
+    QTextCursor cursor = textCursor();
+    int line = cursor.blockNumber();
+    int col = cursor.columnNumber();
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    if (client && client->isRunning()) {
+        QPointer<CodeEditor> guard(this);
+        client->requestDefinition(m_filePath, line, col, [guard](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard || isError) return;
+
+            QList<LspLocation> locations;
+            if (result.isArray()) {
+                for (const QJsonValue &v : result.toArray()) {
+                    locations.append(LspLocation::fromJson(v.toObject()));
+                }
+            } else if (result.isObject()) {
+                locations.append(LspLocation::fromJson(result.toObject()));
+            }
+
+            if (!locations.isEmpty()) {
+                const auto &loc = locations.first();
+                QString targetPath = uriToPath(loc.uri);
+                int targetLine = loc.range.start.line + 1;
+                int targetCol = loc.range.start.character + 1;
+
+                QWidget *top = guard->window();
+                if (top) {
+                    QMetaObject::invokeMethod(top, "navigateToDiagnostic",
+                        Q_ARG(QString, targetPath),
+                        Q_ARG(int, targetLine),
+                        Q_ARG(int, targetCol));
+                }
+            }
+        });
+    }
+}
+
+void CodeEditor::triggerFindReferences() {
+    QTextCursor cursor = textCursor();
+    int line = cursor.blockNumber();
+    int col = cursor.columnNumber();
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    if (client && client->isRunning()) {
+        QPointer<CodeEditor> guard(this);
+        client->requestReferences(m_filePath, line, col, [guard](const QJsonValue &result, const QJsonObject &, bool isError) {
+            if (!guard || isError) return;
+
+            QList<LspLocation> locations;
+            if (result.isArray()) {
+                for (const QJsonValue &v : result.toArray()) {
+                    locations.append(LspLocation::fromJson(v.toObject()));
+                }
+            }
+
+            if (!locations.isEmpty()) {
+                QString logMsg = QString("Found %1 reference(s):\n").arg(locations.size());
+                for (const auto &loc : locations) {
+                    logMsg += QString("%1:%2:%3: Reference\n")
+                        .arg(uriToPath(loc.uri))
+                        .arg(loc.range.start.line + 1)
+                        .arg(loc.range.start.character + 1);
+                }
+                emit LspManager::instance().logMessage(logMsg);
+            }
+        });
+    }
+}
+
+void CodeEditor::triggerRename() {
+    QTextCursor cursor = textCursor();
+    cursor.select(QTextCursor::WordUnderCursor);
+    QString currentName = cursor.selectedText();
+
+    bool ok = false;
+    QString newName = QInputDialog::getText(this, "Rename Symbol", "New symbol name:", QLineEdit::Normal, currentName, &ok);
+    if (!ok || newName.trimmed().isEmpty() || newName == currentName) {
+        return;
+    }
+
+    int line = cursor.blockNumber();
+    int col = cursor.columnNumber();
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    if (client && client->isRunning()) {
+        QPointer<CodeEditor> guard(this);
+        client->requestRename(m_filePath, line, col, newName.trimmed(), [guard](const QJsonValue &resultVal, const QJsonObject &error, bool isError) {
+            if (!guard) return;
+            if (isError) {
+                QString errMsg = error.value("message").toString("Rename failed");
+                QMessageBox::warning(guard.data(), "Rename Failed", errMsg);
+                return;
+            }
+
+            QJsonObject result = resultVal.isObject() ? resultVal.toObject() : QJsonObject();
+            LspWorkspaceEdit edit = LspWorkspaceEdit::fromJson(result);
+            if (edit.changes.isEmpty()) {
+                QMessageBox::information(guard.data(), "Rename Symbol", "No edits returned by language server.");
+                return;
+            }
+
+            for (auto it = edit.changes.begin(); it != edit.changes.end(); ++it) {
+                QString path = uriToPath(it.key());
+                QList<LspTextEdit> edits = it.value();
+
+                std::sort(edits.begin(), edits.end(), [](const LspTextEdit &a, const LspTextEdit &b) {
+                    if (a.range.start.line != b.range.start.line)
+                        return a.range.start.line > b.range.start.line;
+                    return a.range.start.character > b.range.start.character;
+                });
+
+                if (path == guard->m_filePath) {
+                    QTextCursor c(guard->document());
+                    c.beginEditBlock();
+                    for (const auto &e : edits) {
+                        QTextBlock sb = guard->document()->findBlockByLineNumber(e.range.start.line);
+                        QTextBlock eb = guard->document()->findBlockByLineNumber(e.range.end.line);
+                        if (sb.isValid() && eb.isValid()) {
+                            int sp = sb.position() + qMin(e.range.start.character, sb.length() - 1);
+                            int ep = eb.position() + qMin(e.range.end.character, eb.length() - 1);
+                            c.setPosition(sp);
+                            c.setPosition(ep, QTextCursor::KeepAnchor);
+                            c.insertText(e.newText);
+                        }
+                    }
+                    c.endEditBlock();
+                } else {
+                    QFile file(path);
+                    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                        QString text = file.readAll();
+                        file.close();
+                        QStringList lines = text.split('\n');
+                        for (const auto &e : edits) {
+                            if (e.range.start.line < lines.size() && e.range.end.line < lines.size()) {
+                                QString &lineStr = lines[e.range.start.line];
+                                int len = e.range.end.character - e.range.start.character;
+                                lineStr.replace(e.range.start.character, len, e.newText);
+                            }
+                        }
+                        if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                            QTextStream out(&file);
+                            out << lines.join('\n');
+                            file.close();
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+void CodeEditor::contextMenuEvent(QContextMenuEvent *event) {
+    QMenu *menu = createStandardContextMenu();
+    menu->addSeparator();
+
+    LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
+    bool hasLsp = client && client->isRunning();
+
+    QAction *defAct = menu->addAction("Go to Definition", QKeySequence(Qt::Key_F12), this, &CodeEditor::triggerGoToDefinition);
+    defAct->setEnabled(hasLsp && client->capabilities().definitionProvider);
+
+    QAction *refAct = menu->addAction("Find References", QKeySequence(Qt::SHIFT | Qt::Key_F12), this, &CodeEditor::triggerFindReferences);
+    refAct->setEnabled(hasLsp && client->capabilities().referencesProvider);
+
+    QAction *renameAct = menu->addAction("Rename Symbol", QKeySequence(Qt::Key_F2), this, &CodeEditor::triggerRename);
+    renameAct->setEnabled(hasLsp && client->capabilities().renameProvider);
+
+    QAction *hoverAct = menu->addAction("Show Hover Info", this, &CodeEditor::triggerHover);
+    hoverAct->setEnabled(hasLsp && client->capabilities().hoverProvider);
+
+    menu->exec(event->globalPos());
+    delete menu;
+}
+
+void CodeEditor::mouseMoveEvent(QMouseEvent *event) {
+    QPlainTextEdit::mouseMoveEvent(event);
 }
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
@@ -593,8 +886,20 @@ EditorTab::EditorTab(QWidget *parent)
     connect(m_editor->document(), &QTextDocument::contentsChanged, this, &EditorTab::onTextChanged);
     connect(m_editor, &QPlainTextEdit::cursorPositionChanged, this, &EditorTab::onCursorPositionChanged);
 
+    connect(&LspManager::instance(), &LspManager::diagnosticsUpdated, this, [this](const QString &filePath, const QList<LspDiagnostic> &diags) {
+        if (filePath == m_filePath) {
+            m_editor->setDiagnostics(diags);
+        }
+    });
+
     m_typeInfo = FileTypeDetector::detectType("");
     updateHighlighterLanguage();
+}
+
+EditorTab::~EditorTab() {
+    if (!m_filePath.isEmpty()) {
+        LspManager::instance().notifyDocumentClosed(m_filePath);
+    }
 }
 
 void EditorTab::updateHighlighterLanguage() {
@@ -820,9 +1125,12 @@ bool EditorTab::openFile(const QString &filePath, bool showDialog) {
     file.close();
 
     m_filePath = filePath;
+    m_editor->setFilePath(filePath);
     m_editor->document()->setModified(false);
     m_typeInfo = FileTypeDetector::detectType(filePath);
     updateHighlighterLanguage();
+
+    LspManager::instance().notifyDocumentOpened(m_filePath, m_editor->toPlainText());
 
     emit fileTypeChanged(m_typeInfo);
     emit modificationChanged(false);
@@ -874,6 +1182,7 @@ bool EditorTab::save(bool showDialog) {
     file.close();
 
     m_editor->document()->setModified(false);
+    LspManager::instance().notifyDocumentSaved(m_filePath, m_editor->toPlainText());
     emit modificationChanged(false);
 
     return true;
@@ -905,9 +1214,12 @@ bool EditorTab::saveAs(const QString &filePath, bool showDialog) {
     file.close();
 
     m_filePath = filePath;
+    m_editor->setFilePath(filePath);
     m_typeInfo = FileTypeDetector::detectType(filePath);
     updateHighlighterLanguage();
     m_editor->document()->setModified(false);
+
+    LspManager::instance().notifyDocumentSaved(m_filePath, m_editor->toPlainText());
 
     emit fileTypeChanged(m_typeInfo);
     emit modificationChanged(false);
@@ -963,6 +1275,7 @@ bool EditorTab::wordWrap() const {
 }
 
 void EditorTab::onTextChanged() {
+    LspManager::instance().notifyDocumentChanged(m_filePath, m_editor->toPlainText());
     emit modificationChanged(m_editor->document()->isModified());
 }
 
