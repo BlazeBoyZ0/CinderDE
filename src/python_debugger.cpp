@@ -253,7 +253,6 @@ void PythonDebugger::requestScopes(int frameId)
 
 void PythonDebugger::requestVariables(int variablesReference, const QString &scopeName)
 {
-    emit outputReceived(QStringLiteral("%1:").arg(scopeName));
     const int requestSeq = m_client->sendRequest(QStringLiteral("variables"), QJsonObject{
         {QStringLiteral("variablesReference"), variablesReference}
     });
