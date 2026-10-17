@@ -210,9 +210,15 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     m_variableRequestReferences.clear();
     m_initialized = false;
     m_launching = true;
-    emit outputReceived(QStringLiteral("Starting debugger adapter: %1").arg(config.executable));
+    QString adapterProgram = config.executable.trimmed();
+    if (QDir::isRelativePath(adapterProgram) &&
+        (adapterProgram.contains(QLatin1Char('/')) ||
+         QFileInfo(QDir(workspacePath).filePath(adapterProgram)).exists())) {
+        adapterProgram = QDir(workspacePath).absoluteFilePath(adapterProgram);
+    }
+    emit outputReceived(QStringLiteral("Starting debugger adapter: %1").arg(adapterProgram));
     emit stateChanged(true, QStringLiteral("Starting debugger"));
-    if (!m_client->start(config.executable, config.arguments, m_workingDirectory)) {
+    if (!m_client->start(adapterProgram, config.arguments, m_workingDirectory)) {
         m_launching = false;
         emit stateChanged(false, QStringLiteral("Debugger failed to start"));
         return false;
