@@ -34,6 +34,7 @@ set(SOURCES
     src/debug_adapter_client.cpp
     src/debugger_config.cpp
     src/debugger_dialog.cpp
+    src/python_debugger.cpp
     languages.qrc
 )
 
@@ -60,6 +61,7 @@ set(HEADERS
     include/cinderde/debug_adapter_client.h
     include/cinderde/debugger_config.h
     include/cinderde/debugger_dialog.h
+    include/cinderde/python_debugger.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
