@@ -86,45 +86,53 @@ void LspClient::start() {
 }
 
 void LspClient::stop() {
-    if (m_status.state == LspServerState::Stopped) {
+    if (m_status.state == LspServerState::Stopped ||
+        m_status.state == LspServerState::Stopping) {
+        return;
+    }
+
+    if (!m_process || m_process->state() != QProcess::Running) {
+        m_pendingRequests.clear();
+        m_readBuffer.clear();
+        if (m_process) {
+            m_process->deleteLater();
+            m_process = nullptr;
+        }
+        updateStatus(LspServerState::Stopped);
         return;
     }
 
     updateStatus(LspServerState::Stopping);
 
-    if (m_process && m_process->state() == QProcess::Running) {
-        sendRequest("shutdown", QJsonObject(), [this](const QJsonValue &, const QJsonObject &, bool) {
+    // Shutdown is asynchronous: never block the GUI thread waiting for an LSP
+    // server, which may be busy or unresponsive while a workspace is closing.
+    sendRequest("shutdown", QJsonObject(),
+        [this](const QJsonValue &, const QJsonObject &, bool) {
+            if (m_status.state != LspServerState::Stopping || !m_process) {
+                return;
+            }
             sendNotification("exit", QJsonObject());
-            if (m_process) {
-                QTimer::singleShot(500, this, [this]() {
-                    if (m_process && m_process->state() == QProcess::Running) {
-                        m_process->terminate();
-                        if (!m_process->waitForFinished(1000)) {
-                            m_process->kill();
-                        }
-                    }
-                });
-            }
+            QTimer::singleShot(500, this, [this]() {
+                if (m_status.state == LspServerState::Stopping && m_process &&
+                    m_process->state() == QProcess::Running) {
+                    m_process->terminate();
+                }
+            });
         });
 
-        // Fallback timer in case server hangs on shutdown
-        QTimer::singleShot(1500, this, [this]() {
-            if (m_process && m_process->state() != QProcess::NotRunning) {
-                m_process->kill();
-            }
-        });
-
-        m_process->waitForFinished(2000);
-    }
-
-    if (m_process) {
-        m_process->deleteLater();
-        m_process = nullptr;
-    }
-
-    m_pendingRequests.clear();
-    m_readBuffer.clear();
-    updateStatus(LspServerState::Stopped);
+    // If shutdown never responds, terminate and then kill without blocking.
+    QTimer::singleShot(1500, this, [this]() {
+        if (m_status.state == LspServerState::Stopping && m_process &&
+            m_process->state() != QProcess::NotRunning) {
+            m_process->terminate();
+            QTimer::singleShot(500, this, [this]() {
+                if (m_status.state == LspServerState::Stopping && m_process &&
+                    m_process->state() != QProcess::NotRunning) {
+                    m_process->kill();
+                }
+            });
+        }
+    });
 }
 
 void LspClient::sendJsonRpc(const QJsonObject &obj) {
