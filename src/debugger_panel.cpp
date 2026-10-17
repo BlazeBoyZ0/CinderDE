@@ -20,6 +20,8 @@ constexpr int PlaceholderRole = Qt::UserRole + 2;
 DebuggerPanel::DebuggerPanel(QWidget *parent)
     : QWidget(parent), m_stackTree(new QTreeWidget(this)), m_variablesTree(new QTreeWidget(this))
 {
+    m_stackTree->setObjectName(QStringLiteral("debug_stack_tree"));
+    m_variablesTree->setObjectName(QStringLiteral("debug_variables_tree"));
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     auto *splitter = new QSplitter(Qt::Vertical, this);
