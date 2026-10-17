@@ -179,7 +179,11 @@ void DebugAdapterClient::parseMessages()
         } else if (type == QStringLiteral("event")) {
             emit eventReceived(object.value(QStringLiteral("event")).toString(),
                                object.value(QStringLiteral("body")).toObject());
-        } else if (type != QStringLiteral("request")) {
+        } else if (type == QStringLiteral("request")) {
+            emit requestReceived(object.value(QStringLiteral("seq")).toInt(),
+                                 object.value(QStringLiteral("command")).toString(),
+                                 object.value(QStringLiteral("arguments")).toObject());
+        } else {
             emit protocolError(QStringLiteral("Unknown DAP message type: %1").arg(type));
         }
     }
