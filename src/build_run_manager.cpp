@@ -15,7 +15,8 @@ BuildRunManager::BuildRunManager(QObject *parent)
     : QObject(parent),
       m_process(nullptr),
       m_state(Idle),
-      m_runPendingAfterBuild(false)
+      m_runPendingAfterBuild(false),
+      m_isExternalTerminal(false)
 {
 }
 
@@ -340,6 +341,7 @@ void BuildRunManager::startProcess(const QString &command, const QString &workin
     bool pendingRun = m_runPendingAfterBuild;
     stop();
     m_runPendingAfterBuild = pendingRun;
+    m_isExternalTerminal = false;
 
     m_process = new QProcess(this);
     m_process->setWorkingDirectory(workingDir);
@@ -392,31 +394,75 @@ bool BuildRunManager::launchExternalTerminal(const QString &command, const QStri
     QFileInfo fi(programPath);
     QString canonical = fi.canonicalFilePath();
     QString baseTerm = QFileInfo(canonical.isEmpty() ? programPath : canonical).fileName().toLower();
+    bool isWrapper = baseTerm.endsWith(".wrapper") || program.contains("x-terminal-emulator") || programPath.contains("x-terminal-emulator");
+
     if (baseTerm.endsWith(".wrapper")) baseTerm.chop(8);
     if (baseTerm.endsWith(".real")) baseTerm.chop(5);
 
-    QString pauseCmd = QString("%1; echo; read -p 'Process finished. Press Enter to exit...'").arg(command);
+    QString escapedDir = workingDir;
+    escapedDir.replace('\\', "\\\\").replace('"', "\\\"").replace('$', "\\$").replace('`', "\\`");
+
+    QString pauseCmd;
+    if (!workingDir.trimmed().isEmpty()) {
+        pauseCmd = QString("cd \"%1\" && %2 ; echo ; read -p 'Process finished. Press Enter to exit...'")
+                       .arg(escapedDir, command);
+    } else {
+        pauseCmd = QString("%1 ; echo ; read -p 'Process finished. Press Enter to exit...'")
+                       .arg(command);
+    }
 
     QStringList args = userArgs;
 
-    if (baseTerm == "gnome-terminal" || baseTerm == "mate-terminal" || baseTerm == "xfce4-terminal") {
-        args << "--working-directory=" + workingDir << "--" << "bash" << "-c" << pauseCmd;
+    if (isWrapper || baseTerm == "x-terminal-emulator") {
+        args << "-e" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "xfce4-terminal") {
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--working-directory=" + workingDir;
+        }
+        args << "-x" << "bash" << "-c" << pauseCmd;
+    } else if (baseTerm == "gnome-terminal" || baseTerm == "mate-terminal") {
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--working-directory=" + workingDir;
+        }
+        args << "--" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "konsole") {
-        args << "--workdir" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--workdir" << workingDir;
+        }
+        args << "-e" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "alacritty") {
-        args << "--working-directory" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--working-directory" << workingDir;
+        }
+        args << "-e" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "kitty") {
-        args << "--directory" << workingDir << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--directory" << workingDir;
+        }
+        args << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "lxterminal") {
-        args << "--working-directory=" + workingDir << "-e" << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--working-directory=" + workingDir;
+        }
+        args << "-e" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "tilix") {
-        args << "-w" << workingDir << "-e" << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "-w" << workingDir;
+        }
+        args << "-e" << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "foot") {
-        args << "-D" << workingDir << "bash" << "-c" << pauseCmd;
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "-D" << workingDir;
+        }
+        args << "bash" << "-c" << pauseCmd;
     } else if (baseTerm == "wezterm") {
-        args << "start" << "--cwd" << workingDir << "--" << "bash" << "-c" << pauseCmd;
+        args << "start";
+        if (!workingDir.trimmed().isEmpty()) {
+            args << "--cwd" << workingDir;
+        }
+        args << "--" << "bash" << "-c" << pauseCmd;
     } else { // xterm, rxvt, st, or fallback
-        args << "-e" << "bash" << "-c" << QString("cd '%1' && %2").arg(workingDir, pauseCmd);
+        args << "-e" << "bash" << "-c" << pauseCmd;
     }
 
     stop();
@@ -430,6 +476,7 @@ bool BuildRunManager::launchExternalTerminal(const QString &command, const QStri
     connect(m_process, &QProcess::errorOccurred, this, &BuildRunManager::onProcessErrorOccurred);
 
     m_state = Running;
+    m_isExternalTerminal = true;
     emit stateChanged(true, "Running in External Terminal...");
     emit processStarted(command, false);
 
@@ -455,6 +502,7 @@ void BuildRunManager::stop() {
     }
 
     m_runPendingAfterBuild = false;
+    m_isExternalTerminal = false;
     if (m_state != Idle) {
         m_state = Idle;
         emit stateChanged(false, "Process Stopped");
@@ -481,14 +529,25 @@ void BuildRunManager::onReadyReadStandardError() {
 
 void BuildRunManager::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus) {
     bool wasBuild = (m_state == Building);
+    bool wasExternalTerminal = m_isExternalTerminal;
 
-    emit outputReceived(QString("\n=== %1 (Exit code: %2) ===\n")
-                            .arg(exitStatus == QProcess::NormalExit ? "PROCESS FINISHED" : "PROCESS CRASHED")
-                            .arg(exitCode), wasBuild);
+    if (wasExternalTerminal) {
+        if (exitCode == 0 && exitStatus == QProcess::NormalExit) {
+            emit outputReceived("\n=== EXTERNAL TERMINAL LAUNCHED SUCCESSFULLY ===\n(Program execution and output managed in terminal window)\n", false);
+        } else {
+            emit outputReceived(QString("\n=== EXTERNAL TERMINAL LAUNCHER FAILED (Exit code: %1) ===\n").arg(exitCode), false);
+        }
+        emit processFinished(exitCode, exitStatus, false);
+    } else {
+        emit outputReceived(QString("\n=== %1 (Exit code: %2) ===\n")
+                                .arg(exitStatus == QProcess::NormalExit ? "PROCESS FINISHED" : "PROCESS CRASHED")
+                                .arg(exitCode), wasBuild);
 
-    emit processFinished(exitCode, exitStatus, wasBuild);
+        emit processFinished(exitCode, exitStatus, wasBuild);
+    }
 
     m_state = Idle;
+    m_isExternalTerminal = false;
     emit stateChanged(false, "Idle");
 
     if (wasBuild) {

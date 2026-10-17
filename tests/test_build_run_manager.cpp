@@ -101,6 +101,67 @@ private slots:
         }
         QVERIFY(foundInOutput);
     }
+
+    void testExternalTerminalExecutionWithSpaces() {
+        QTemporaryDir tempDir;
+        QVERIFY(tempDir.isValid());
+
+        QDir spaceDir(tempDir.path());
+        QVERIFY(spaceDir.mkdir("Python codes"));
+        QString spaceDirPath = spaceDir.filePath("Python codes");
+
+        QString scriptPath = QDir(spaceDirPath).filePath("learning script.py");
+        QString logPath = QDir(spaceDirPath).filePath("out.log");
+
+        QFile scriptFile(scriptPath);
+        QVERIFY(scriptFile.open(QIODevice::WriteOnly | QIODevice::Text));
+        scriptFile.write(QString("with open(r'%1', 'w') as f:\n    f.write('EXECUTED_SUCCESSFULLY')\n").arg(logPath).toUtf8());
+        scriptFile.close();
+
+        // Create a mock terminal script that executes the command argument passed to -e
+        QString mockTermPath = QDir(tempDir.path()).filePath("mock_xterm.sh");
+        QFile mockTermFile(mockTermPath);
+        QVERIFY(mockTermFile.open(QIODevice::WriteOnly | QIODevice::Text));
+        mockTermFile.write(
+            "#!/bin/bash\n"
+            "# Mock terminal emulator script\n"
+            "if [ \"$1\" = \"-e\" ]; then\n"
+            "    shift\n"
+            "fi\n"
+            "echo '' | exec \"$@\"\n"
+        );
+        mockTermFile.close();
+        mockTermFile.setPermissions(QFile::ExeOwner | QFile::ReadOwner | QFile::WriteOwner);
+
+        CinderDE::BuildRunManager manager;
+        CinderDE::WorkspaceConfig config;
+        config.hasExecutionMode = true;
+        config.executionMode = "external_terminal";
+        config.hasTerminalCommand = true;
+        config.terminalCommand = mockTermPath;
+
+        QSignalSpy finishedSpy(&manager, &CinderDE::BuildRunManager::processFinished);
+        QSignalSpy outputSpy(&manager, &CinderDE::BuildRunManager::outputReceived);
+
+        manager.run(scriptPath, spaceDirPath, config);
+
+        QVERIFY(finishedSpy.wait(3000));
+        QCOMPARE(finishedSpy.count(), 1);
+
+        QFile logFile(logPath);
+        QVERIFY(logFile.open(QIODevice::ReadOnly));
+        QString logContent = QString::fromUtf8(logFile.readAll()).trimmed();
+        QCOMPARE(logContent, QString("EXECUTED_SUCCESSFULLY"));
+
+        bool foundLaunchedMsg = false;
+        for (const auto &call : outputSpy) {
+            if (call.at(0).toString().contains("EXTERNAL TERMINAL LAUNCHED SUCCESSFULLY")) {
+                foundLaunchedMsg = true;
+                break;
+            }
+        }
+        QVERIFY(foundLaunchedMsg);
+    }
 };
 
 QTEST_MAIN(TestBuildRunManager)
