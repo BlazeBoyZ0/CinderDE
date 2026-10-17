@@ -677,6 +677,11 @@ void CodeEditor::triggerCompletion() {
     }
 }
 
+void CodeEditor::cancelPendingCompletion() {
+    ++m_completionRequestGeneration;
+    if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
+}
+
 void CodeEditor::triggerHover() {
     QTextCursor cursor = textCursor();
     int line = cursor.blockNumber();
