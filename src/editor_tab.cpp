@@ -597,8 +597,15 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         const QChar ch = typed.back();
         if (ch.isLetterOrNumber() || ch == '_') {
             m_autoCompletionTimer->start();
-        } else if (ch == '.' || ch == ':') {
+        } else if (ch == '.') {
             m_autoCompletionTimer->start(0);
+        } else if (ch == ':') {
+            const QString line = textCursor().block().text().left(textCursor().positionInBlock());
+            if (line.endsWith("::")) {
+                m_autoCompletionTimer->start(0);
+            } else {
+                m_autoCompletionTimer->stop();
+            }
         } else {
             m_autoCompletionTimer->stop();
         }
