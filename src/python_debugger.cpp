@@ -80,6 +80,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
                 }
             }
         } else if (command == QStringLiteral("variables")) {
+            const QString scopeName = m_variableRequestNames.take(requestSeq);
             const QJsonArray variables = body.value(QStringLiteral("variables")).toArray();
             QStringList lines;
             for (const QJsonValue &value : variables) {
@@ -91,7 +92,9 @@ PythonDebugger::PythonDebugger(QObject *parent)
                     line += QStringLiteral("  [expandable]");
                 lines.append(line);
             }
-            emit outputReceived(QStringLiteral("Variables:\n%1").arg(lines.join(QLatin1Char('\n'))));
+            emit outputReceived(QStringLiteral("%1:\n%2")
+                                .arg(scopeName.isEmpty() ? QStringLiteral("Variables") : scopeName,
+                                     lines.join(QLatin1Char('\n'))));
         } else if (command == QStringLiteral("disconnect")) {
             m_client->stop();
         }
@@ -192,6 +195,7 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     m_breakpointLines = breakpointLines;
     m_threadId = 0;
     m_frameId = 0;
+    m_variableRequestNames.clear();
     m_initialized = false;
     m_launching = true;
     emit outputReceived(QStringLiteral("Starting debugger adapter: %1").arg(config.executable));
@@ -250,9 +254,10 @@ void PythonDebugger::requestScopes(int frameId)
 void PythonDebugger::requestVariables(int variablesReference, const QString &scopeName)
 {
     emit outputReceived(QStringLiteral("%1:").arg(scopeName));
-    m_client->sendRequest(QStringLiteral("variables"), QJsonObject{
+    const int requestSeq = m_client->sendRequest(QStringLiteral("variables"), QJsonObject{
         {QStringLiteral("variablesReference"), variablesReference}
     });
+    m_variableRequestNames.insert(requestSeq, scopeName);
 }
 
 void PythonDebugger::continueExecution()
