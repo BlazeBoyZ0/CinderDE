@@ -32,8 +32,6 @@ PythonDebugger::PythonDebugger(QObject *parent)
             if (command == QStringLiteral("launch") || command == QStringLiteral("initialize")) {
                 m_stopping = true;
                 m_client->stop();
-                emit stateChanged(false, QStringLiteral("Debugging failed"));
-                emit sessionFinished();
             }
             return;
         }
@@ -97,6 +95,13 @@ PythonDebugger::PythonDebugger(QObject *parent)
         } else if (command == QStringLiteral("disconnect")) {
             m_client->stop();
         }
+    });
+
+    connect(m_client, &DebugAdapterClient::requestReceived, this,
+            [this](int requestSeq, const QString &command, const QJsonObject &) {
+        emit outputReceived(QStringLiteral("Adapter requested unsupported operation: %1").arg(command));
+        m_client->sendResponse(requestSeq, command, false, QJsonObject{},
+                               QStringLiteral("This DAP request is not supported by CinderDE yet."));
     });
 
     connect(m_client, &DebugAdapterClient::eventReceived, this,
