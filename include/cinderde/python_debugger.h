@@ -6,6 +6,7 @@
 #include <QHash>
 #include <QString>
 #include <QJsonObject>
+#include <QJsonArray>
 #include "cinderde/debug_adapter_client.h"
 #include "cinderde/debugger_config.h"
 
@@ -26,12 +27,17 @@ public:
     void stepInto();
     void stepOut();
     void stop();
+    void selectFrame(int frameId, const QString &path, int line);
+    void expandVariables(int variablesReference, const QString &name);
 
 signals:
     void outputReceived(const QString &text);
     void currentLineChanged(const QString &filePath, int line);
     void stateChanged(bool active, const QString &status);
     void sessionFinished();
+    void stackFramesReceived(const QJsonArray &frames);
+    void scopesReceived(const QJsonArray &scopes);
+    void variablesReceived(int parentReference, const QString &scopeName, const QJsonArray &variables);
 
 private:
     DebugAdapterClient *m_client;
@@ -41,6 +47,7 @@ private:
     int m_threadId = 0;
     int m_frameId = 0;
     QHash<int, QString> m_variableRequestNames;
+    QHash<int, int> m_variableRequestReferences;
     bool m_initialized = false;
     bool m_launching = false;
     bool m_stopping = false;
