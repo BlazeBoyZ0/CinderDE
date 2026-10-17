@@ -8,6 +8,8 @@
 #include <QToolBar>
 #include <QAction>
 #include <QMenu>
+#include <QSet>
+#include "cinderde/python_debugger.h"
 #include "cinderde/editor_tab.h"
 #include "cinderde/file_explorer.h"
 #include "cinderde/workspace_config.h"
@@ -50,6 +52,15 @@ private slots:
     // Settings actions
     void showPreferencesDialog();
     void showLspDialog();
+    void showDebuggerDialog();
+    void startDebugging();
+    void toggleBreakpoint();
+    void continueDebugging();
+    void pauseDebugging();
+    void stepOverDebugging();
+    void stepIntoDebugging();
+    void stepOutDebugging();
+    void stopDebugging();
 
     // View actions
     void toggleExplorer();
@@ -87,6 +98,8 @@ private:
     QTabWidget *m_tabWidget;
     OutputPanel *m_outputPanel;
     BuildRunManager *m_buildRunManager;
+    PythonDebugger *m_pythonDebugger;
+    QSet<int> m_breakpointLines;
 
     // Status bar labels
     QLabel *m_statusCursorLabel;
@@ -99,6 +112,13 @@ private:
     QAction *m_wordWrapAction;
     QAction *m_sessionRestoreAction;
     QAction *m_stopProcessAction;
+    QAction *m_startDebuggingAction;
+    QAction *m_continueDebuggingAction;
+    QAction *m_pauseDebuggingAction;
+    QAction *m_stepOverAction;
+    QAction *m_stepIntoAction;
+    QAction *m_stepOutAction;
+    QAction *m_stopDebuggingAction;
     QMenu *m_recentWorkspacesMenu;
 
     WorkspaceConfig m_activeWorkspaceConfig;
