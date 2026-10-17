@@ -349,3 +349,17 @@ target_link_libraries(debug_adapter_client_tests PRIVATE
 )
 
 add_test(NAME DebugAdapterClientTest COMMAND debug_adapter_client_tests)
+
+add_executable(debugger_config_tests
+    tests/test_debugger_config.cpp
+    src/debugger_config.cpp
+    include/cinderde/debugger_config.h
+)
+
+target_link_libraries(debugger_config_tests PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME DebuggerConfigTest COMMAND debugger_config_tests)
+
