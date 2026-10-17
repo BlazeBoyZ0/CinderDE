@@ -2,6 +2,7 @@
 
 #include <QLabel>
 #include <QTreeWidget>
+#include <QJsonObject>
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QHeaderView>
@@ -129,7 +130,8 @@ void DebuggerPanel::populateVariables(int parentReference, const QString &, cons
     if (!parent)
         return;
 
-    parent->takeChildren();
+    while (parent->childCount() > 0)
+        delete parent->takeChild(0);
     parent->setData(0, LoadedRole, true);
     if (variables.isEmpty()) {
         parent->setText(1, QStringLiteral("(empty)"));
@@ -162,7 +164,8 @@ void DebuggerPanel::onVariableExpanded(QTreeWidgetItem *item)
     if (reference <= 0)
         return;
     item->setData(0, LoadedRole, true);
-    item->takeChildren();
+    while (item->childCount() > 0)
+        delete item->takeChild(0);
     emit expandRequested(reference, item->text(0));
 }
 
