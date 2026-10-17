@@ -29,7 +29,6 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     m_nameEdit->setPlaceholderText(QStringLiteral("e.g. Python debugpy"));
     m_languageCombo = new QComboBox(this);
     m_languageCombo->addItem(QStringLiteral("Python"), QStringLiteral("python"));
-    m_languageCombo->addItem(QStringLiteral("Other DAP-compatible adapter"), QStringLiteral("other"));
     const int languageIndex = m_languageCombo->findData(config.languageId);
     if (languageIndex >= 0)
         m_languageCombo->setCurrentIndex(languageIndex);
