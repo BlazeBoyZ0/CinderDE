@@ -533,6 +533,8 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
     }
 
     if (e->key() == Qt::Key_Return || e->key() == Qt::Key_Enter) {
+        ++m_completionRequestGeneration;
+        if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
         handleSmartEnter();
         if (m_completionPopup) m_completionPopup->hide();
         return;
@@ -553,12 +555,23 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             } else {
                 m_completionPopup->updateSuggestions(prefix, m_language);
             }
+
+            // Refresh language-aware suggestions after deleting text too.
+            if (m_autoCompletionTimer) {
+                if (line.endsWith(".") || line.endsWith("::")) {
+                    m_autoCompletionTimer->start(0);
+                } else if (!prefix.isEmpty()) {
+                    m_autoCompletionTimer->start();
+                }
+            }
         }
         return;
     }
 
     if (e->modifiers() == Qt::NoModifier || e->modifiers() == Qt::ShiftModifier) {
         if (handleBracketPairing(e)) {
+            ++m_completionRequestGeneration;
+            if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
             if (m_completionPopup) m_completionPopup->hide();
             return;
         }
