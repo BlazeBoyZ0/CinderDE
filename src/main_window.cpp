@@ -1104,11 +1104,14 @@ void MainWindow::startDebugging() {
 
     const QString commandPreview = config.executable +
         (config.arguments.isEmpty() ? QString() : QStringLiteral(" ") + config.arguments.join(QLatin1Char(' ')));
+    const QString runtimeNotice = config.runtimeExecutable.isEmpty()
+        ? QStringLiteral("Python runtime: adapter default")
+        : QStringLiteral("Python runtime: %1").arg(config.runtimeExecutable);
     const auto trust = QMessageBox::warning(
         this, "Run Workspace Debugger?",
-        QString("CinderDE is about to execute this external debugger command:\n\n%1\n\n"
+        QString("CinderDE is about to execute this external debugger command:\n\n%1\n%2\n\n"
                 "Workspace configurations can contain untrusted commands. Only continue if you trust this configuration.")
-            .arg(commandPreview),
+            .arg(commandPreview, runtimeNotice),
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (trust != QMessageBox::Yes)
         return;
