@@ -568,7 +568,10 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         ++m_completionRequestGeneration;
         if (m_autoCompletionTimer) m_autoCompletionTimer->stop();
         handleSmartBackspace(e);
-        if (m_completionPopup) {
+        LspClient *backspaceClient = LspManager::instance().getClientForDocument(m_filePath, false);
+        const bool backspaceHasLsp = backspaceClient && backspaceClient->isRunning()
+            && backspaceClient->capabilities().completionProvider;
+        if (m_completionPopup && !backspaceHasLsp) {
             QTextCursor cursor = textCursor();
             QString line = cursor.block().text().left(cursor.positionInBlock());
             static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
@@ -579,15 +582,8 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             } else {
                 m_completionPopup->updateSuggestions(prefix, m_language);
             }
-
-            // Refresh language-aware suggestions after deleting text too.
-            if (m_autoCompletionTimer) {
-                if (line.endsWith(".") || line.endsWith("::")) {
-                    m_autoCompletionTimer->start(0);
-                } else if (!prefix.isEmpty()) {
-                    m_autoCompletionTimer->start();
-                }
-            }
+        } else if (m_completionPopup) {
+            m_completionPopup->hide();
         }
         return;
     }
@@ -668,6 +664,10 @@ void CodeEditor::triggerCompletion() {
     LspClient *client = LspManager::instance().getClientForDocument(m_filePath, false);
     if (client && client->isRunning()) {
         QPointer<CodeEditor> guard(this);
+        const QString beforeCursor = cursor.block().text().left(cursor.positionInBlock());
+        QString triggerCharacter;
+        if (beforeCursor.endsWith(".")) triggerCharacter = ".";
+        else if (beforeCursor.endsWith("::")) triggerCharacter = ":";
         client->requestCompletion(m_filePath, line, col, [guard, prefix, requestGeneration](const QJsonValue &result, const QJsonObject &, bool isError) {
             if (!guard || guard->m_completionRequestGeneration != requestGeneration) return;
             if (!isError && !result.isNull()) {
@@ -693,7 +693,7 @@ void CodeEditor::triggerCompletion() {
                     guard->m_completionPopup->updateSuggestions(prefix, guard->m_language);
                 }
             }
-        });
+        }, triggerCharacter);
     } else {
         if (m_completionPopup) {
             if (m_languageDef.isValid()) {
