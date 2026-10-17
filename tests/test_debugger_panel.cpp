@@ -25,7 +25,7 @@ void DebuggerPanelTest::loadsLocalsAndExpandsNestedValues()
     QCOMPARE(expandSpy.count(), 1);
     QCOMPARE(expandSpy.takeFirst().at(0).toInt(), 10);
 
-    QTreeWidget *tree = panel.findChild<QTreeWidget *>();
+    QTreeWidget *tree = panel.findChild<QTreeWidget *>(QStringLiteral("debug_variables_tree"));
     QVERIFY(tree);
     QTreeWidgetItem *locals = tree->topLevelItem(0);
     QVERIFY(locals);
