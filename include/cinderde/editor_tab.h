@@ -12,6 +12,7 @@
 #include <QPaintEvent>
 #include <QResizeEvent>
 #include <QTimer>
+#include <QSet>
 #include "cinderde/file_type_detector.h"
 #include "cinderde/syntax_highlighter.h"
 #include "cinderde/lsp_types.h"
@@ -43,6 +44,9 @@ public:
     int lineNumberAreaWidth() const;
     void setEditorFontSize(int size);
     void setEditorTabSize(int size);
+    void toggleBreakpoint(int line);
+    QSet<int> breakpointLines() const { return m_breakpointLines; }
+    void setBreakpoints(const QSet<int> &lines);
 
     void setLanguage(Language lang) { m_language = lang; }
     Language language() const { return m_language; }
@@ -85,6 +89,7 @@ private:
     int m_completionRequestGeneration;
     QString m_filePath;
     QList<struct LspDiagnostic> m_diagnostics;
+    QSet<int> m_breakpointLines;
 
     void handleSmartEnter();
     void handleSmartBackspace(QKeyEvent *e);
