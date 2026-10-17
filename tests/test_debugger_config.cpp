@@ -25,6 +25,7 @@ void DebuggerConfigTest::roundTripWorkspaceConfigurations()
     config.name = QStringLiteral("Python debugpy");
     config.languageId = QStringLiteral("python");
     config.executable = QStringLiteral("python3");
+    config.runtimeExecutable = QStringLiteral(".venv/bin/python");
     config.arguments = {QStringLiteral("-m"), QStringLiteral("debugpy.adapter")};
     config.workingDirectory = QStringLiteral("src");
     config.enabled = true;
@@ -35,6 +36,7 @@ void DebuggerConfigTest::roundTripWorkspaceConfigurations()
     QCOMPARE(loaded.first().id, config.id);
     QCOMPARE(loaded.first().languageId, config.languageId);
     QCOMPARE(loaded.first().executable, config.executable);
+    QCOMPARE(loaded.first().runtimeExecutable, config.runtimeExecutable);
     QCOMPARE(loaded.first().arguments, config.arguments);
     QCOMPARE(loaded.first().workingDirectory, config.workingDirectory);
     QVERIFY(loaded.first().enabled);
