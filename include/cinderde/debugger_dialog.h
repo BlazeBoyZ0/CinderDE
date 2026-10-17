@@ -23,11 +23,13 @@ private:
     QLineEdit *m_nameEdit;
     QComboBox *m_languageCombo;
     QLineEdit *m_executableEdit;
+    QLineEdit *m_runtimeExecutableEdit;
     QLineEdit *m_argumentsEdit;
     QLineEdit *m_workingDirectoryEdit;
     QCheckBox *m_enabledCheck;
     QString m_id;
     void browseExecutable();
+    void browseRuntimeExecutable();
     void browseWorkingDirectory();
     void validateAndAccept();
 };
