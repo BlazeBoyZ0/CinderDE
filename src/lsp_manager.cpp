@@ -138,8 +138,22 @@ LspClient* LspManager::createAndStartClient(const LspServerConfig &config) {
 
     LspClient *client = new LspClient(config, m_workspacePath, this);
 
-    connect(client, &LspClient::statusChanged, this, [this, config](const LspServerStatus &status) {
+    connect(client, &LspClient::statusChanged, this, [this, config, client](const LspServerStatus &status) {
         emit serverStatusChanged(config.id, status);
+
+        // Documents may be opened before initialize completes. Flush their latest
+        // contents once the server is ready, and never send didOpen twice.
+        if (status.state == LspServerState::Running) {
+            for (auto it = m_openDocs.begin(); it != m_openDocs.end(); ++it) {
+                OpenDocumentInfo &info = it.value();
+                if (!info.isOpen || info.didOpenSent ||
+                    findConfigForFile(info.filePath).id != config.id) {
+                    continue;
+                }
+                client->notifyDidOpen(info.filePath, info.languageId, info.version, info.pendingText);
+                info.didOpenSent = true;
+            }
+        }
     });
 
     connect(client, &LspClient::diagnosticsReceived, this, [this](const QString &filePath, const QList<LspDiagnostic> &diagnostics) {
@@ -169,11 +183,17 @@ void LspManager::notifyDocumentOpened(const QString &filePath, const QString &te
     info.languageId = langId;
     info.version = 1;
     info.isOpen = true;
+    info.pendingText = text;
+    info.didOpenSent = false;
     m_openDocs[filePath] = info;
 
     LspClient *client = getClientForDocument(filePath, true);
     if (client && client->isRunning()) {
-        client->notifyDidOpen(filePath, langId, info.version, text);
+        OpenDocumentInfo &storedInfo = m_openDocs[filePath];
+        if (!storedInfo.didOpenSent) {
+            client->notifyDidOpen(filePath, langId, storedInfo.version, storedInfo.pendingText);
+            storedInfo.didOpenSent = true;
+        }
     }
 }
 
@@ -191,6 +211,10 @@ void LspManager::onDebouncingTimerTimeout() {
 
         if (m_openDocs.contains(filePath)) {
             OpenDocumentInfo &info = m_openDocs[filePath];
+            if (!info.didOpenSent) {
+                info.pendingText = text;
+                continue;
+            }
             info.version++;
 
             LspClient *client = getClientForDocument(filePath, false);
@@ -210,10 +234,14 @@ void LspManager::notifyDocumentSaved(const QString &filePath, const QString &tex
         QString pendingText = m_pendingDocChanges.take(filePath);
         if (m_openDocs.contains(filePath)) {
             OpenDocumentInfo &info = m_openDocs[filePath];
-            info.version++;
-            LspClient *client = getClientForDocument(filePath, false);
-            if (client && client->isRunning()) {
-                client->notifyDidChange(filePath, info.version, pendingText);
+            if (!info.didOpenSent) {
+                info.pendingText = pendingText;
+            } else {
+                info.version++;
+                LspClient *client = getClientForDocument(filePath, false);
+                if (client && client->isRunning()) {
+                    client->notifyDidChange(filePath, info.version, pendingText);
+                }
             }
         }
     }
@@ -240,11 +268,20 @@ void LspManager::notifyDocumentClosed(const QString &filePath) {
 }
 
 void LspManager::stopServer(const QString &configId) {
-    if (m_clients.contains(configId)) {
-        LspClient *client = m_clients.take(configId);
-        client->stop();
-        client->deleteLater();
+    if (!m_clients.contains(configId)) {
+        return;
     }
+
+    LspClient *client = m_clients.take(configId);
+    // Keep the client alive until its asynchronous shutdown has actually finished.
+    connect(client, &LspClient::statusChanged, client,
+            [client](const LspServerStatus &status) {
+                if (status.state == LspServerState::Stopped ||
+                    status.state == LspServerState::Failed) {
+                    client->deleteLater();
+                }
+            });
+    client->stop();
 }
 
 void LspManager::restartServer(const QString &configId) {
@@ -263,14 +300,22 @@ void LspManager::stopAllServers() {
     m_debounceTimer->stop();
     m_pendingDocChanges.clear();
 
-    for (auto it = m_clients.begin(); it != m_clients.end(); ++it) {
-        LspClient *client = it.value();
-        if (client) {
-            client->stop();
-            client->deleteLater();
-        }
-    }
+    const QList<LspClient*> clients = m_clients.values();
     m_clients.clear();
+    for (LspClient *client : clients) {
+        if (!client) {
+            continue;
+        }
+        // Keep each client alive to complete its asynchronous shutdown.
+        connect(client, &LspClient::statusChanged, client,
+                [client](const LspServerStatus &status) {
+                    if (status.state == LspServerState::Stopped ||
+                        status.state == LspServerState::Failed) {
+                        client->deleteLater();
+                    }
+                });
+        client->stop();
+    }
 }
 
 } // namespace CinderDE
