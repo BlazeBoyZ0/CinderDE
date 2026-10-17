@@ -120,6 +120,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
             return;
         if (event == QStringLiteral("initialized")) {
             m_initialized = true;
+            m_launching = false;
             sendBreakpoints();
             m_client->sendRequest(QStringLiteral("configurationDone"));
             emit outputReceived(QStringLiteral("Debugger initialized."));
