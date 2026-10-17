@@ -49,6 +49,14 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     executableRow->addWidget(browseExecutableButton);
     connect(browseExecutableButton, &QPushButton::clicked, this, [this]() { browseExecutable(); });
 
+    auto *runtimeRow = new QHBoxLayout;
+    m_runtimeExecutableEdit = new QLineEdit(config.runtimeExecutable, this);
+    m_runtimeExecutableEdit->setPlaceholderText(QStringLiteral("Optional interpreter, e.g. .venv/bin/python"));
+    auto *browseRuntimeButton = new QPushButton(QStringLiteral("Browse..."), this);
+    runtimeRow->addWidget(m_runtimeExecutableEdit, 1);
+    runtimeRow->addWidget(browseRuntimeButton);
+    connect(browseRuntimeButton, &QPushButton::clicked, this, [this]() { browseRuntimeExecutable(); });
+
     m_argumentsEdit = new QLineEdit(config.arguments.join(QLatin1Char(' ')), this);
     m_argumentsEdit->setPlaceholderText(QStringLiteral("Arguments separated by spaces"));
     auto *directoryRow = new QHBoxLayout;
@@ -63,6 +71,7 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     form->addRow(QStringLiteral("Name:"), m_nameEdit);
     form->addRow(QStringLiteral("Language:"), m_languageCombo);
     form->addRow(QStringLiteral("Adapter executable:"), executableRow);
+    form->addRow(QStringLiteral("Python runtime:"), runtimeRow);
     form->addRow(QStringLiteral("Arguments:"), m_argumentsEdit);
     form->addRow(QStringLiteral("Working directory:"), directoryRow);
     form->addRow(QString(), m_enabledCheck);
@@ -79,6 +88,13 @@ void DebuggerConfigEditDialog::browseExecutable()
     const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Select Debug Adapter Executable"));
     if (!path.isEmpty())
         m_executableEdit->setText(path);
+}
+
+void DebuggerConfigEditDialog::browseRuntimeExecutable()
+{
+    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Select Python Runtime"));
+    if (!path.isEmpty())
+        m_runtimeExecutableEdit->setText(path);
 }
 
 void DebuggerConfigEditDialog::browseWorkingDirectory()
@@ -118,6 +134,7 @@ DebuggerConfiguration DebuggerConfigEditDialog::configuration() const
     config.name = m_nameEdit->text().trimmed();
     config.languageId = m_languageCombo->currentData().toString();
     config.executable = m_executableEdit->text().trimmed();
+    config.runtimeExecutable = m_runtimeExecutableEdit->text().trimmed();
     config.arguments = m_argumentsEdit->text().split(QLatin1Char(' '), Qt::SkipEmptyParts);
     config.workingDirectory = m_workingDirectoryEdit->text().trimmed();
     config.enabled = m_enabledCheck->isChecked();
@@ -150,6 +167,7 @@ DebuggerDialog::DebuggerDialog(const QString &workspacePath, QWidget *parent)
     m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     layout->addWidget(m_table, 1);
 
     auto *actions = new QHBoxLayout;
