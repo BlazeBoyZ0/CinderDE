@@ -911,6 +911,9 @@ void MainWindow::closeTab(int index) {
     if (!tab) return;
 
     if (promptSaveIfModified(tab)) {
+        if (m_pythonDebugger && m_pythonDebugger->isActive() &&
+            QFileInfo(tab->filePath()).absoluteFilePath() == m_pythonDebugger->programPath())
+            m_pythonDebugger->stop();
         m_tabWidget->removeTab(index);
         delete tab;
 
