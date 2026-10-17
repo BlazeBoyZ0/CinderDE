@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QSet>
+#include <QHash>
 #include <QString>
 #include <QJsonObject>
 #include "cinderde/debug_adapter_client.h"
@@ -40,6 +41,7 @@ private:
     QSet<int> m_breakpointLines;
     int m_threadId = 0;
     int m_frameId = 0;
+    QHash<int, QString> m_variableRequestNames;
     bool m_initialized = false;
     bool m_launching = false;
     bool m_stopping = false;
