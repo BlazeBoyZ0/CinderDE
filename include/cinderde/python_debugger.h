@@ -17,6 +17,7 @@ public:
     bool start(const DebuggerConfiguration &config, const QString &programPath,
                const QString &workspacePath, const QSet<int> &breakpointLines);
     bool isActive() const;
+    QString programPath() const { return m_programPath; }
     void setBreakpoints(const QSet<int> &lines);
     void continueExecution();
     void pauseExecution();
