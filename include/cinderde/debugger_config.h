@@ -12,6 +12,7 @@ struct DebuggerConfiguration {
     QString name;
     QString languageId;
     QString executable;
+    QString runtimeExecutable;
     QStringList arguments;
     QString workingDirectory;
     bool enabled = true;
