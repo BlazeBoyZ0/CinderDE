@@ -86,7 +86,7 @@ int CodeEditor::lineNumberAreaWidth() const {
         max /= 10;
         digits++;
     }
-    int space = 12 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
+    int space = 24 + fontMetrics().horizontalAdvance(QLatin1Char('9')) * digits;
     return space;
 }
 
@@ -100,6 +100,21 @@ void CodeEditor::setEditorFontSize(int size) {
 void CodeEditor::setEditorTabSize(int size) {
     if (size < 1) size = 1;
     setTabStopDistance(fontMetrics().horizontalAdvance(' ') * size);
+}
+
+void CodeEditor::toggleBreakpoint(int line) {
+    if (line < 1 || line > blockCount())
+        return;
+    if (m_breakpointLines.contains(line))
+        m_breakpointLines.remove(line);
+    else
+        m_breakpointLines.insert(line);
+    m_lineNumberArea->update();
+}
+
+void CodeEditor::setBreakpoints(const QSet<int> &lines) {
+    m_breakpointLines = lines;
+    m_lineNumberArea->update();
 }
 
 void CodeEditor::updateLineNumberAreaWidth(int /* newBlockCount */) {
@@ -930,7 +945,14 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
                 painter.setPen(QColor("#606060")); // Muted line numbers
             }
             painter.setFont(font());
-            painter.drawText(0, top, m_lineNumberArea->width() - 6, fontMetrics().height(),
+            if (m_breakpointLines.contains(blockNumber + 1)) {
+                painter.setPen(Qt::NoPen);
+                painter.setBrush(QColor("#ff6b35"));
+                painter.drawEllipse(QPoint(7, top + fontMetrics().height() / 2), 4, 4);
+                painter.setBrush(Qt::NoBrush);
+            }
+            painter.setPen(blockNumber == textCursor().blockNumber() ? QColor("#e0e0e0") : QColor("#606060"));
+            painter.drawText(14, top, m_lineNumberArea->width() - 20, fontMetrics().height(),
                              Qt::AlignRight | Qt::AlignVCenter, number);
         }
 
