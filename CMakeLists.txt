@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(CinderDE VERSION 0.8.0 LANGUAGES CXX)
+project(CinderDE VERSION 0.9.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,6 +31,7 @@ set(SOURCES
     src/lsp_client.cpp
     src/lsp_manager.cpp
     src/lsp_dialog.cpp
+    src/debug_adapter_client.cpp
     languages.qrc
 )
 
@@ -54,6 +55,7 @@ set(HEADERS
     include/cinderde/lsp_client.h
     include/cinderde/lsp_manager.h
     include/cinderde/lsp_dialog.h
+    include/cinderde/debug_adapter_client.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
@@ -327,3 +329,17 @@ target_link_libraries(lsp_tests PRIVATE
 )
 
 add_test(NAME LspTest COMMAND lsp_tests -platform offscreen)
+
+
+add_executable(debug_adapter_client_tests
+    tests/test_debug_adapter_client.cpp
+    src/debug_adapter_client.cpp
+    include/cinderde/debug_adapter_client.h
+)
+
+target_link_libraries(debug_adapter_client_tests PRIVATE
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME DebugAdapterClientTest COMMAND debug_adapter_client_tests)
