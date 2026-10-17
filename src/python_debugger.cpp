@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QDir>
 #include <QProcess>
+#include <QTimer>
 
 namespace CinderDE {
 
@@ -140,6 +141,11 @@ PythonDebugger::PythonDebugger(QObject *parent)
     });
     connect(m_client, &DebugAdapterClient::processError, this, [this](const QString &message) {
         emit outputReceived(QStringLiteral("Debugger error: %1").arg(message));
+        if (!m_client->isRunning() && m_launching) {
+            m_launching = false;
+            emit stateChanged(false, QStringLiteral("Debugger failed to start"));
+            emit sessionFinished();
+        }
     });
     connect(m_client, &DebugAdapterClient::protocolError, this, [this](const QString &message) {
         emit outputReceived(QStringLiteral("Debugger protocol error: %1").arg(message));
@@ -175,7 +181,9 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     m_workspacePath = QDir(workspacePath).absolutePath();
     m_workingDirectory = config.workingDirectory.trimmed().isEmpty()
         ? (workspacePath.isEmpty() ? programInfo.absolutePath() : QDir(workspacePath).absolutePath())
-        : QDir(config.workingDirectory).absolutePath();
+        : (QDir::isAbsolutePath(config.workingDirectory)
+            ? QDir::cleanPath(config.workingDirectory)
+            : QDir(workspacePath).absoluteFilePath(config.workingDirectory));
     m_breakpointLines = breakpointLines;
     m_threadId = 0;
     m_frameId = 0;
@@ -279,12 +287,18 @@ void PythonDebugger::stop()
         return;
     }
     m_stopping = true;
-    if (m_initialized)
+    if (m_initialized) {
         m_client->sendRequest(QStringLiteral("disconnect"), QJsonObject{
             {QStringLiteral("restart"), false},
             {QStringLiteral("terminateDebuggee"), true}
         });
-    m_client->stop();
+        QTimer::singleShot(1500, this, [this]() {
+            if (m_client->isRunning())
+                m_client->stop();
+        });
+    } else {
+        m_client->stop();
+    }
 }
 
 void PythonDebugger::reportResponseFailure(const QString &command, const QString &message)
