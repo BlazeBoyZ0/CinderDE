@@ -197,6 +197,11 @@ void MainWindow::setupUi() {
     });
 
     connect(m_fileExplorer, &FileExplorer::fileRenamed, this, [this](const QString &oldPath, const QString &newPath) {
+        if (m_pythonDebugger && m_pythonDebugger->isActive()) {
+            const QString target = m_pythonDebugger->programPath();
+            if (target == oldPath || target.startsWith(oldPath + "/"))
+                m_pythonDebugger->stop();
+        }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
             EditorTab *tab = tabAt(i);
             if (!tab) continue;
@@ -217,6 +222,11 @@ void MainWindow::setupUi() {
     });
 
     connect(m_fileExplorer, &FileExplorer::fileDeleted, this, [this](const QString &deletedPath) {
+        if (m_pythonDebugger && m_pythonDebugger->isActive()) {
+            const QString target = m_pythonDebugger->programPath();
+            if (target == deletedPath || target.startsWith(deletedPath + "/"))
+                m_pythonDebugger->stop();
+        }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
             EditorTab *tab = tabAt(i);
             if (!tab) continue;
