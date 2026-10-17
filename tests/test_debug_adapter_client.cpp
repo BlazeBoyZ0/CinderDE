@@ -25,8 +25,16 @@ while True:
             length = int(line.split(":", 1)[1].strip())
     body = sys.stdin.buffer.read(length)
     request = json.loads(body.decode())
+    server_request = {
+        "seq": 2,
+        "type": "request",
+        "command": "runInTerminal",
+        "arguments": {}
+    }
+    request_encoded = json.dumps(server_request, separators=(",", ":")).encode()
+    sys.stdout.buffer.write(b"Content-Length: " + str(len(request_encoded)).encode() + b"\r\n\r\n" + request_encoded)
     response = {
-        "seq": 1,
+        "seq": 3,
         "type": "response",
         "request_seq": request["seq"],
         "command": request["command"],
@@ -42,12 +50,16 @@ while True:
 
         CinderDE::DebugAdapterClient client;
         QSignalSpy responseSpy(&client, &CinderDE::DebugAdapterClient::responseReceived);
+        QSignalSpy requestSpy(&client, &CinderDE::DebugAdapterClient::requestReceived);
         QVERIFY(responseSpy.isValid());
+        QVERIFY(requestSpy.isValid());
         QVERIFY(client.start(QStringLiteral("python3"), {script.fileName()}));
         QTRY_VERIFY_WITH_TIMEOUT(client.isRunning(), 2000);
 
         const int seq = client.sendRequest(QStringLiteral("test/request"));
         QTRY_COMPARE_WITH_TIMEOUT(responseSpy.count(), 1, 3000);
+        QTRY_COMPARE_WITH_TIMEOUT(requestSpy.count(), 1, 3000);
+        QCOMPARE(requestSpy.takeFirst().at(1).toString(), QStringLiteral("runInTerminal"));
 
         const QList<QVariant> args = responseSpy.takeFirst();
         QCOMPARE(args.at(0).toInt(), seq);
