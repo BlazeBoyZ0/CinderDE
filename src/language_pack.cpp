@@ -149,22 +149,67 @@ LanguageRegistry& LanguageRegistry::instance() {
 }
 
 LanguageRegistry::LanguageRegistry() {
-    registerBuiltinLanguages();
+    discoverPacks();
 }
 
-bool LanguageRegistry::registerLanguage(const LanguageDefinition &def) {
-    if (!def.isValid()) return false;
+QString LanguageRegistry::userLanguagesDirectory() {
+    QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir dir(configDir);
+    if (!dir.exists()) {
+        dir.mkpath(".");
+    }
+    QString userLangDir = dir.filePath("languages");
+    QDir langDir(userLangDir);
+    if (!langDir.exists()) {
+        langDir.mkpath(".");
+    }
+    return userLangDir;
+}
+
+bool LanguageRegistry::registerLanguage(const LanguageDefinition &def, const QString &filePath, LanguagePackSource source) {
+    LanguagePackInfo info;
+    info.id = def.id;
+    info.name = def.name;
+    info.extensions = def.extensions;
+    info.filePath = filePath;
+    info.source = source;
+
+    if (!def.isValid()) {
+        info.loaded = false;
+        info.statusMessage = "Invalid definition: 'id' or 'name' missing";
+        m_packInfos.append(info);
+        return false;
+    }
+
+    if (m_definitionsById.contains(def.id)) {
+        info.loaded = false;
+        info.statusMessage = QString("Duplicate identifier '%1' ignored").arg(def.id);
+        m_packInfos.append(info);
+        return false;
+    }
 
     m_definitionsById[def.id] = def;
     for (const QString &ext : def.extensions) {
-        m_extensionToIdMap[ext.toLower()] = def.id;
+        if (!m_extensionToIdMap.contains(ext.toLower())) {
+            m_extensionToIdMap[ext.toLower()] = def.id;
+        }
     }
+
+    info.loaded = true;
+    info.statusMessage = "Loaded successfully";
+    m_packInfos.append(info);
     return true;
 }
 
-bool LanguageRegistry::loadFromFile(const QString &filePath) {
+bool LanguageRegistry::loadFromFile(const QString &filePath, LanguagePackSource source) {
     QFile file(filePath);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        LanguagePackInfo info;
+        info.filePath = filePath;
+        info.source = source;
+        info.loaded = false;
+        info.statusMessage = QString("Failed to open file: %1").arg(file.errorString());
+        m_packInfos.append(info);
         return false;
     }
 
@@ -174,31 +219,56 @@ bool LanguageRegistry::loadFromFile(const QString &filePath) {
     QJsonParseError error;
     QJsonDocument doc = QJsonDocument::fromJson(data, &error);
     if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+        LanguagePackInfo info;
+        info.filePath = filePath;
+        info.source = source;
+        info.loaded = false;
+        info.statusMessage = QString("Invalid JSON format: %1").arg(error.errorString());
+        m_packInfos.append(info);
         return false;
     }
 
-    return loadFromJson(doc.object());
+    return loadFromJson(doc.object(), filePath, source);
 }
 
-bool LanguageRegistry::loadFromJson(const QJsonObject &json) {
+bool LanguageRegistry::loadFromJson(const QJsonObject &json, const QString &filePath, LanguagePackSource source) {
     bool ok = false;
     LanguageDefinition def = LanguageDefinition::fromJson(json, &ok);
-    if (!ok) return false;
-    return registerLanguage(def);
+    if (!ok) {
+        LanguagePackInfo info;
+        info.id = json.value("id").toString();
+        info.name = json.value("name").toString();
+        info.filePath = filePath;
+        info.source = source;
+        info.loaded = false;
+        info.statusMessage = "Failed to parse language pack definition";
+        m_packInfos.append(info);
+        return false;
+    }
+    return registerLanguage(def, filePath, source);
 }
 
-int LanguageRegistry::loadFromDirectory(const QString &dirPath) {
+int LanguageRegistry::loadFromDirectory(const QString &dirPath, LanguagePackSource source) {
     QDir dir(dirPath);
     if (!dir.exists()) return 0;
 
     int loadedCount = 0;
     QStringList files = dir.entryList(QStringList() << "*.json", QDir::Files);
     for (const QString &fileName : files) {
-        if (loadFromFile(dir.filePath(fileName))) {
+        if (loadFromFile(dir.filePath(fileName), source)) {
             loadedCount++;
         }
     }
     return loadedCount;
+}
+
+void LanguageRegistry::discoverPacks() {
+    clear();
+    registerBuiltinLanguages();
+
+    // Search user-installed languages directory
+    QString userDir = userLanguagesDirectory();
+    loadFromDirectory(userDir, LanguagePackSource::User);
 }
 
 void LanguageRegistry::registerBuiltinLanguages() {
@@ -206,19 +276,8 @@ void LanguageRegistry::registerBuiltinLanguages() {
     m_builtinsLoaded = true;
 
     // Check Qt resources directory :/resources/languages and :/languages
-    loadFromDirectory(":/resources/languages");
-    loadFromDirectory(":/languages");
-
-    // Search local directory paths
-    QStringList searchPaths = {
-        "./languages",
-        "../share/cinderde/languages",
-        QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation)).filePath("languages")
-    };
-
-    for (const QString &path : searchPaths) {
-        loadFromDirectory(path);
-    }
+    loadFromDirectory(":/resources/languages", LanguagePackSource::Builtin);
+    loadFromDirectory(":/languages", LanguagePackSource::Builtin);
 
     // Fallback built-in C definition if not present
     if (!hasDefinition("c")) {
@@ -243,7 +302,7 @@ void LanguageRegistry::registerBuiltinLanguages() {
         cDef.comments = {"//", "/*", "*/"};
         cDef.indentation = {4, true, true};
         cDef.buildRun = {"gcc -g \"${file}\" -o \"${fileDir}/${fileBase}\"", "\"${fileDir}/${fileBase}\"", "workspace"};
-        registerLanguage(cDef);
+        registerLanguage(cDef, "", LanguagePackSource::Builtin);
     }
 
     // Fallback built-in C++ definition if not present
@@ -283,7 +342,7 @@ void LanguageRegistry::registerBuiltinLanguages() {
         cppDef.comments = {"//", "/*", "*/"};
         cppDef.indentation = {4, true, true};
         cppDef.buildRun = {"g++ -g \"${file}\" -o \"${fileDir}/${fileBase}\"", "\"${fileDir}/${fileBase}\"", "workspace"};
-        registerLanguage(cppDef);
+        registerLanguage(cppDef, "", LanguagePackSource::Builtin);
     }
 
     // Fallback built-in Python definition if not present
@@ -313,8 +372,12 @@ void LanguageRegistry::registerBuiltinLanguages() {
         pyDef.comments = {"#", "", ""};
         pyDef.indentation = {4, true, false};
         pyDef.buildRun = {"", "python3 \"${file}\"", "workspace"};
-        registerLanguage(pyDef);
+        registerLanguage(pyDef, "", LanguagePackSource::Builtin);
     }
+}
+
+QList<LanguagePackInfo> LanguageRegistry::packInfos() const {
+    return m_packInfos;
 }
 
 LanguageDefinition LanguageRegistry::definitionForExtension(const QString &extension) const {
@@ -343,6 +406,7 @@ bool LanguageRegistry::hasDefinition(const QString &id) const {
 void LanguageRegistry::clear() {
     m_definitionsById.clear();
     m_extensionToIdMap.clear();
+    m_packInfos.clear();
     m_builtinsLoaded = false;
 }
 

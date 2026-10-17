@@ -293,7 +293,8 @@ void CodeEditor::handleSmartBackspace(QKeyEvent *e) {
     QString leading = text.left(posInBlock);
     if (!leading.isEmpty() && leading.trimmed().isEmpty() && leading.contains(' ')) {
         int spaces = leading.length();
-        int tabWidth = 4;
+        int tabWidth = m_languageDef.isValid() ? m_languageDef.indentation.tabSize : 4;
+        if (tabWidth < 1) tabWidth = 4;
         int deleteCount = spaces % tabWidth;
         if (deleteCount == 0) deleteCount = tabWidth;
         deleteCount = qMin(deleteCount, spaces);
@@ -360,14 +361,16 @@ bool CodeEditor::handleBracketPairing(QKeyEvent *e) {
     }
 
     // 3. Auto unindent closing brace '}' if alone on line
-    if (ch == '}' && (m_language == Language::C || m_language == Language::Cpp)) {
+    if (ch == '}' && ((m_language == Language::C || m_language == Language::Cpp) || (m_languageDef.isValid() && m_languageDef.indentation.autoIndentOnBrace))) {
         QString lineText = cursor.block().text();
         int posInBlock = cursor.positionInBlock();
         QString leftText = lineText.left(posInBlock);
         if (!leftText.isEmpty() && leftText.trimmed().isEmpty()) {
-            if (leftText.length() >= 4) {
+            int tabWidth = m_languageDef.isValid() ? m_languageDef.indentation.tabSize : 4;
+            if (tabWidth < 1) tabWidth = 4;
+            if (leftText.length() >= tabWidth) {
                 cursor.beginEditBlock();
-                for (int i = 0; i < 4; ++i) cursor.deletePreviousChar();
+                for (int i = 0; i < tabWidth; ++i) cursor.deletePreviousChar();
                 cursor.insertText("}");
                 cursor.endEditBlock();
                 return true;
@@ -493,7 +496,11 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             static const QRegularExpression wordRx(R"(\b[a-zA-Z_]\w*$)");
             auto match = wordRx.match(line);
             QString prefix = match.hasMatch() ? match.captured(0) : "";
-            m_completionPopup->updateSuggestions(prefix, m_language);
+            if (m_languageDef.isValid()) {
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
+            } else {
+                m_completionPopup->updateSuggestions(prefix, m_language);
+            }
         }
         return;
     }

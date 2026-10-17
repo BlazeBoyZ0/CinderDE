@@ -2,6 +2,7 @@
 #include "cinderde/preferences.h"
 #include "cinderde/workspace_config.h"
 #include "cinderde/build_run_dialog.h"
+#include "cinderde/preferences_dialog.h"
 #include <QMenuBar>
 #include <QMenu>
 #include <QStatusBar>
@@ -191,6 +192,11 @@ void MainWindow::setupMenus() {
 
     QAction *closeTabAct = fileMenu->addAction("&Close Tab", QKeySequence::Close, this, &MainWindow::closeCurrentTab);
     closeTabAct->setStatusTip("Close current document tab");
+
+    fileMenu->addSeparator();
+
+    QAction *prefAct = fileMenu->addAction("Prefere&nces...", QKeySequence(Qt::CTRL | Qt::Key_Comma), this, &MainWindow::showPreferencesDialog);
+    prefAct->setStatusTip("Configure editor and language packs");
 
     fileMenu->addSeparator();
 
@@ -891,6 +897,20 @@ void MainWindow::showFind() {
 
 void MainWindow::showReplace() {
     if (currentTab()) currentTab()->showFindReplaceBar(true);
+}
+
+void MainWindow::showPreferencesDialog() {
+    PreferencesDialog dlg(this);
+    if (dlg.exec() == QDialog::Accepted) {
+        applyWorkspaceSettings();
+        for (int i = 0; i < m_tabWidget->count(); ++i) {
+            EditorTab *tab = tabAt(i);
+            if (tab) {
+                tab->setFontSize(Preferences::instance().fontSize());
+                tab->updateHighlighterLanguage();
+            }
+        }
+    }
 }
 
 void MainWindow::buildAndRun() {

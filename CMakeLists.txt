@@ -20,6 +20,7 @@ set(SOURCES
     src/file_explorer.cpp
     src/file_type_detector.cpp
     src/preferences.cpp
+    src/preferences_dialog.cpp
     src/syntax_highlighter.cpp
     src/workspace_config.cpp
     src/diagnostic_parser.cpp
@@ -37,6 +38,7 @@ set(HEADERS
     include/cinderde/file_explorer.h
     include/cinderde/file_type_detector.h
     include/cinderde/preferences.h
+    include/cinderde/preferences_dialog.h
     include/cinderde/syntax_theme.h
     include/cinderde/syntax_highlighter.h
     include/cinderde/workspace_config.h

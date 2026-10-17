@@ -63,17 +63,19 @@ FileTypeInfo FileTypeDetector::detectType(const QString &filePath) {
         return info;
     }
 
-    if (extensionMap.contains(ext)) {
-        info.name = extensionMap.value(ext);
-    } else {
-        LanguageDefinition langDef = LanguageRegistry::instance().definitionForExtension(ext);
-        if (langDef.isValid()) {
-            info.name = langDef.name;
-        } else if (!ext.isEmpty()) {
-            info.name = ext.toUpper() + " File";
+    LanguageDefinition langDef = LanguageRegistry::instance().definitionForExtension(ext);
+    if (langDef.isValid()) {
+        if ((ext == "h" || ext == "hpp" || ext == "hxx") && extensionMap.contains(ext)) {
+            info.name = extensionMap.value(ext);
         } else {
-            info.name = "Plain Text";
+            info.name = langDef.name;
         }
+    } else if (extensionMap.contains(ext)) {
+        info.name = extensionMap.value(ext);
+    } else if (!ext.isEmpty()) {
+        info.name = ext.toUpper() + " File";
+    } else {
+        info.name = "Plain Text";
     }
 
     return info;
