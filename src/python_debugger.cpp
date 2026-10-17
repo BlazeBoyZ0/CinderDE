@@ -48,13 +48,16 @@ PythonDebugger::PythonDebugger(QObject *parent)
         }
 
         if (command == QStringLiteral("initialize")) {
-            m_client->sendRequest(QStringLiteral("launch"), QJsonObject{
+            QJsonObject launchArguments{
                 {QStringLiteral("program"), m_programPath},
                 {QStringLiteral("cwd"), m_workingDirectory},
                 {QStringLiteral("console"), QStringLiteral("internalConsole")},
                 {QStringLiteral("justMyCode"), true},
                 {QStringLiteral("stopOnEntry"), false}
-            });
+            };
+            if (!m_runtimeExecutable.isEmpty())
+                launchArguments.insert(QStringLiteral("python"), m_runtimeExecutable);
+            m_client->sendRequest(QStringLiteral("launch"), launchArguments);
         } else if (command == QStringLiteral("setBreakpoints")) {
             emit outputReceived(QStringLiteral("Breakpoints configured."));
         } else if (command == QStringLiteral("stackTrace")) {
@@ -192,6 +195,9 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     }
 
     m_programPath = programInfo.absoluteFilePath();
+    m_runtimeExecutable = config.runtimeExecutable.trimmed();
+    if (!m_runtimeExecutable.isEmpty() && !QDir::isAbsolutePath(m_runtimeExecutable))
+        m_runtimeExecutable = QDir(workspacePath).absoluteFilePath(m_runtimeExecutable);
     m_workingDirectory = config.workingDirectory.trimmed().isEmpty()
         ? (workspacePath.isEmpty() ? programInfo.absolutePath() : QDir(workspacePath).absolutePath())
         : (QDir::isAbsolutePath(config.workingDirectory)
