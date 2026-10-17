@@ -80,6 +80,8 @@ private:
     LanguageDefinition m_languageDef;
     CodeCompletionPopup *m_completionPopup;
     QTimer *m_autoCompletionTimer;
+    QTimer *m_hoverTimer;
+    QPoint m_hoverPoint;
     int m_completionRequestGeneration;
     QString m_filePath;
     QList<struct LspDiagnostic> m_diagnostics;
