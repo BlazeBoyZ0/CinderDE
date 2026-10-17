@@ -57,6 +57,7 @@ public:
 
     void setDiagnostics(const QList<struct LspDiagnostic> &diagnostics);
     void triggerCompletion();
+    void cancelPendingCompletion();
     void triggerHover();
     void triggerGoToDefinition();
     void triggerFindReferences();
