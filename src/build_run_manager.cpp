@@ -1,5 +1,6 @@
 #include "cinderde/build_run_manager.h"
 #include "cinderde/preferences.h"
+#include "cinderde/language_pack.h"
 #include <QFileInfo>
 #include <QDir>
 #include <QDirIterator>
@@ -216,6 +217,13 @@ std::pair<QString, QString> BuildRunManager::resolveCommands(const QString &file
     // Single-file fallback defaults based on extension
     QFileInfo info(filePath);
     QString ext = info.suffix().toLower();
+
+    LanguageDefinition langDef = LanguageRegistry::instance().definitionForExtension(ext);
+    if (langDef.isValid() && (!langDef.buildRun.buildCommand.isEmpty() || !langDef.buildRun.runCommand.isEmpty())) {
+        buildCmd = langDef.buildRun.buildCommand;
+        runCmd = langDef.buildRun.runCommand;
+        return {buildCmd, runCmd};
+    }
 
     if (ext == "cpp" || ext == "cc" || ext == "cxx" || ext == "c++") {
         buildCmd = "g++ -g \"${file}\" -o \"${fileDir}/${fileBase}\"";

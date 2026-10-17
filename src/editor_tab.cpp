@@ -213,7 +213,13 @@ void CodeEditor::handleSmartEnter() {
     QString trimmedLeft = leftText.trimmed();
     bool increaseIndent = false;
 
-    if (m_language == Language::C || m_language == Language::Cpp) {
+    if (m_languageDef.isValid()) {
+        if (m_languageDef.indentation.autoIndentOnBrace) {
+            if (trimmedLeft.endsWith('{') || trimmedLeft.endsWith(':')) {
+                increaseIndent = true;
+            }
+        }
+    } else if (m_language == Language::C || m_language == Language::Cpp) {
         if (trimmedLeft.endsWith('{')) {
             increaseIndent = true;
         }
@@ -227,8 +233,9 @@ void CodeEditor::handleSmartEnter() {
         }
     }
 
-    int tabWidth = 4; // default space indent step if using spaces
-    QString indentStep = "    ";
+    int tabWidth = m_languageDef.isValid() ? m_languageDef.indentation.tabSize : 4;
+    if (tabWidth < 1) tabWidth = 4;
+    QString indentStep = (m_languageDef.isValid() && !m_languageDef.indentation.useSpaces) ? "\t" : QString(tabWidth, ' ');
 
     cursor.beginEditBlock();
     cursor.insertBlock();
@@ -404,7 +411,9 @@ void CodeEditor::toggleComment() {
     int endBlock = document()->findBlock(cursor.selectionEnd()).blockNumber();
 
     QString commentPrefix = "// ";
-    if (m_language == Language::Python) {
+    if (m_languageDef.isValid() && !m_languageDef.comments.linePrefix.isEmpty()) {
+        commentPrefix = m_languageDef.comments.linePrefix + " ";
+    } else if (m_language == Language::Python) {
         commentPrefix = "# ";
     }
 
@@ -461,7 +470,11 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         auto match = wordRx.match(line);
         QString prefix = match.hasMatch() ? match.captured(0) : "";
         if (m_completionPopup) {
-            m_completionPopup->updateSuggestions(prefix, m_language);
+            if (m_languageDef.isValid()) {
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
+            } else {
+                m_completionPopup->updateSuggestions(prefix, m_language);
+            }
         }
         return;
     }
@@ -502,7 +515,11 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         auto match = wordRx.match(line);
         if (match.hasMatch()) {
             QString prefix = match.captured(0);
-            m_completionPopup->updateSuggestions(prefix, m_language);
+            if (m_languageDef.isValid()) {
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
+            } else {
+                m_completionPopup->updateSuggestions(prefix, m_language);
+            }
         } else {
             m_completionPopup->hide();
         }
@@ -574,12 +591,26 @@ EditorTab::EditorTab(QWidget *parent)
 }
 
 void EditorTab::updateHighlighterLanguage() {
-    Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
+    LanguageDefinition def = LanguageRegistry::instance().definitionForExtension(m_typeInfo.extension);
     if (m_highlighter) {
-        m_highlighter->setLanguage(lang);
+        if (def.isValid()) {
+            m_highlighter->setLanguageDefinition(def);
+        } else {
+            Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
+            m_highlighter->setLanguage(lang);
+        }
     }
     if (m_editor) {
-        m_editor->setLanguage(lang);
+        if (def.isValid()) {
+            m_editor->setLanguageDefinition(def);
+            m_editor->setLanguage(m_highlighter ? m_highlighter->language() : Language::None);
+            if (def.indentation.tabSize > 0) {
+                m_editor->setEditorTabSize(def.indentation.tabSize);
+            }
+        } else {
+            Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
+            m_editor->setLanguage(lang);
+        }
     }
 }
 

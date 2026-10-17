@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QStringList>
 #include "cinderde/syntax_highlighter.h"
+#include "cinderde/language_pack.h"
 
 namespace CinderDE {
 
@@ -17,6 +18,7 @@ public:
     explicit CodeCompletionPopup(CodeEditor *editor);
 
     void updateSuggestions(const QString &prefix, Language lang);
+    void updateSuggestions(const QString &prefix, const LanguageDefinition &def);
     void insertCurrentSuggestion();
 
 protected:
@@ -27,6 +29,7 @@ private:
     QString m_currentPrefix;
 
     QStringList getKeywordsForLanguage(Language lang) const;
+    QStringList getKeywordsForLanguage(const LanguageDefinition &def) const;
     QSet<QString> extractDocumentIdentifiers() const;
     void positionPopup();
 };

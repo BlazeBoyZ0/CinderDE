@@ -45,6 +45,9 @@ public:
     void setLanguage(Language lang) { m_language = lang; }
     Language language() const { return m_language; }
 
+    void setLanguageDefinition(const LanguageDefinition &def) { m_languageDef = def; }
+    LanguageDefinition languageDefinition() const { return m_languageDef; }
+
     void toggleComment();
 
 protected:
@@ -59,6 +62,7 @@ private slots:
 private:
     QWidget *m_lineNumberArea;
     Language m_language;
+    LanguageDefinition m_languageDef;
     CodeCompletionPopup *m_completionPopup;
 
     void handleSmartEnter();

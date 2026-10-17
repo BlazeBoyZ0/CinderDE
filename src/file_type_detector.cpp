@@ -1,4 +1,5 @@
 #include "cinderde/file_type_detector.h"
+#include "cinderde/language_pack.h"
 #include <QFileInfo>
 #include <QFile>
 #include <QMap>
@@ -64,10 +65,15 @@ FileTypeInfo FileTypeDetector::detectType(const QString &filePath) {
 
     if (extensionMap.contains(ext)) {
         info.name = extensionMap.value(ext);
-    } else if (!ext.isEmpty()) {
-        info.name = ext.toUpper() + " File";
     } else {
-        info.name = "Plain Text";
+        LanguageDefinition langDef = LanguageRegistry::instance().definitionForExtension(ext);
+        if (langDef.isValid()) {
+            info.name = langDef.name;
+        } else if (!ext.isEmpty()) {
+            info.name = ext.toUpper() + " File";
+        } else {
+            info.name = "Plain Text";
+        }
     }
 
     return info;

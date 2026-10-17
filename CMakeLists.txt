@@ -26,6 +26,8 @@ set(SOURCES
     src/output_panel.cpp
     src/build_run_manager.cpp
     src/build_run_dialog.cpp
+    src/language_pack.cpp
+    languages.qrc
 )
 
 set(HEADERS
@@ -42,6 +44,7 @@ set(HEADERS
     include/cinderde/output_panel.h
     include/cinderde/build_run_manager.h
     include/cinderde/build_run_dialog.h
+    include/cinderde/language_pack.h
 )
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
@@ -57,6 +60,8 @@ enable_testing()
 add_executable(cinderde_tests
     tests/test_file_type_detector.cpp
     src/file_type_detector.cpp
+    src/language_pack.cpp
+    languages.qrc
 )
 
 target_link_libraries(cinderde_tests PRIVATE
@@ -73,6 +78,8 @@ add_executable(editor_tab_tests
     src/file_type_detector.cpp
     src/preferences.cpp
     src/syntax_highlighter.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -94,6 +101,8 @@ add_executable(syntax_highlighter_tests
     src/code_completion.cpp
     src/file_type_detector.cpp
     src/preferences.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -132,6 +141,8 @@ add_executable(workspace_session_tests
     src/code_completion.cpp
     src/file_type_detector.cpp
     src/syntax_highlighter.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/preferences.h
     include/cinderde/workspace_config.h
     include/cinderde/editor_tab.h
@@ -165,6 +176,8 @@ add_executable(build_run_manager_tests
     src/build_run_manager.cpp
     src/preferences.cpp
     src/workspace_config.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/build_run_manager.h
 )
 
@@ -196,6 +209,8 @@ add_executable(v05_features_tests
     src/build_run_manager.cpp
     src/preferences.cpp
     src/workspace_config.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/build_run_manager.h
 )
 
@@ -213,6 +228,8 @@ add_executable(code_completion_tests
     src/file_type_detector.cpp
     src/preferences.cpp
     src/syntax_highlighter.cpp
+    src/language_pack.cpp
+    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -226,3 +243,31 @@ target_link_libraries(code_completion_tests PRIVATE
 )
 
 add_test(NAME CodeCompletionTest COMMAND code_completion_tests -platform offscreen)
+
+add_executable(language_pack_tests
+    tests/test_language_pack.cpp
+    src/language_pack.cpp
+    src/file_type_detector.cpp
+    src/syntax_highlighter.cpp
+    src/editor_tab.cpp
+    src/code_completion.cpp
+    src/preferences.cpp
+    src/build_run_manager.cpp
+    src/workspace_config.cpp
+    languages.qrc
+    include/cinderde/language_pack.h
+    include/cinderde/file_type_detector.h
+    include/cinderde/syntax_highlighter.h
+    include/cinderde/editor_tab.h
+    include/cinderde/code_completion.h
+    include/cinderde/build_run_manager.h
+)
+
+target_link_libraries(language_pack_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Gui
+    Qt6::Test
+)
+
+add_test(NAME LanguagePackTest COMMAND language_pack_tests -platform offscreen)

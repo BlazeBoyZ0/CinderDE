@@ -44,37 +44,29 @@ CodeCompletionPopup::CodeCompletionPopup(CodeEditor *editor)
 }
 
 QStringList CodeCompletionPopup::getKeywordsForLanguage(Language lang) const {
+    LanguageDefinition def;
     if (lang == Language::C) {
-        return {
-            "auto", "break", "case", "char", "const", "continue", "default", "do",
-            "double", "else", "enum", "extern", "float", "for", "goto", "if",
-            "inline", "int", "long", "register", "restrict", "return", "short",
-            "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
-            "unsigned", "void", "volatile", "while", "bool", "true", "false", "NULL", "nullptr"
-        };
+        def = LanguageRegistry::instance().definitionForId("c");
     } else if (lang == Language::Cpp) {
-        return {
-            "auto", "break", "case", "char", "const", "continue", "default", "do",
-            "double", "else", "enum", "extern", "float", "for", "goto", "if",
-            "inline", "int", "long", "register", "restrict", "return", "short",
-            "signed", "sizeof", "static", "struct", "switch", "typedef", "union",
-            "unsigned", "void", "volatile", "while", "bool", "true", "false", "NULL", "nullptr",
-            "alignas", "alignof", "and", "catch", "class", "concept", "constexpr",
-            "const_cast", "decltype", "delete", "dynamic_cast", "explicit", "export",
-            "friend", "mutable", "namespace", "new", "noexcept", "operator", "private",
-            "protected", "public", "reinterpret_cast", "static_assert", "static_cast",
-            "template", "this", "throw", "try", "typename", "using", "virtual", "std"
-        };
+        def = LanguageRegistry::instance().definitionForId("cpp");
     } else if (lang == Language::Python) {
-        return {
-            "False", "None", "True", "and", "as", "assert", "async", "await",
-            "break", "class", "continue", "def", "del", "elif", "else", "except",
-            "finally", "for", "from", "global", "if", "import", "in", "is",
-            "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
-            "while", "with", "yield", "print", "len", "range", "enumerate", "self", "super"
-        };
+        def = LanguageRegistry::instance().definitionForId("python");
+    }
+    if (def.isValid()) {
+        return getKeywordsForLanguage(def);
     }
     return {};
+}
+
+QStringList CodeCompletionPopup::getKeywordsForLanguage(const LanguageDefinition &def) const {
+    QStringList result = def.keywords;
+    for (const QString &t : def.types) {
+        if (!result.contains(t)) result.append(t);
+    }
+    for (const QString &b : def.builtins) {
+        if (!result.contains(b)) result.append(b);
+    }
+    return result;
 }
 
 QSet<QString> CodeCompletionPopup::extractDocumentIdentifiers() const {
@@ -92,6 +84,19 @@ QSet<QString> CodeCompletionPopup::extractDocumentIdentifiers() const {
 }
 
 void CodeCompletionPopup::updateSuggestions(const QString &prefix, Language lang) {
+    LanguageDefinition def;
+    if (lang == Language::C) def = LanguageRegistry::instance().definitionForId("c");
+    else if (lang == Language::Cpp) def = LanguageRegistry::instance().definitionForId("cpp");
+    else if (lang == Language::Python) def = LanguageRegistry::instance().definitionForId("python");
+
+    if (def.isValid()) {
+        updateSuggestions(prefix, def);
+    } else {
+        updateSuggestions(prefix, LanguageDefinition());
+    }
+}
+
+void CodeCompletionPopup::updateSuggestions(const QString &prefix, const LanguageDefinition &def) {
     m_currentPrefix = prefix;
     clear();
 
@@ -103,7 +108,7 @@ void CodeCompletionPopup::updateSuggestions(const QString &prefix, Language lang
     QSet<QString> candidates;
 
     // Add language keywords
-    for (const QString &kw : getKeywordsForLanguage(lang)) {
+    for (const QString &kw : getKeywordsForLanguage(def)) {
         if (kw.startsWith(prefix, Qt::CaseInsensitive) && kw != prefix) {
             candidates.insert(kw);
         }
