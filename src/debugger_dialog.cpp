@@ -22,6 +22,14 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
 {
     setWindowTitle(config.id.isEmpty() ? QStringLiteral("Add Debugger") : QStringLiteral("Edit Debugger"));
     setMinimumWidth(500);
+    setStyleSheet(R"(
+        QDialog { background-color: #1e1e1e; color: #cccccc; }
+        QLabel { color: #cccccc; }
+        QLineEdit, QComboBox { background-color: #252526; color: #dddddd; border: 1px solid #444444; padding: 4px; }
+        QPushButton { background-color: #333333; color: #eeeeee; border: 1px solid #484848; padding: 5px 10px; }
+        QPushButton:hover { background-color: #ff6b35; color: #ffffff; }
+        QCheckBox { color: #cccccc; }
+    )");
 
     auto *layout = new QVBoxLayout(this);
     auto *form = new QFormLayout;
@@ -87,6 +95,19 @@ void DebuggerConfigEditDialog::validateAndAccept()
                              QStringLiteral("Enter a debugger name and adapter executable."));
         return;
     }
+    const QString executable = m_executableEdit->text().trimmed();
+    const bool executableFound =
+        (QFileInfo::exists(executable) && QFileInfo(executable).isExecutable()) ||
+        !QStandardPaths::findExecutable(executable).isEmpty();
+    if (!executableFound) {
+        const auto choice = QMessageBox::warning(
+            this, QStringLiteral("Executable Not Found"),
+            QStringLiteral("The adapter executable '%1' could not be found. Save this configuration anyway?")
+                .arg(executable),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (choice != QMessageBox::Yes)
+            return;
+    }
     accept();
 }
 
@@ -109,6 +130,13 @@ DebuggerDialog::DebuggerDialog(const QString &workspacePath, QWidget *parent)
 {
     setWindowTitle(QStringLiteral("Workspace Debuggers"));
     resize(720, 360);
+    setStyleSheet(R"(
+        QDialog { background-color: #1e1e1e; color: #cccccc; }
+        QTableWidget { background-color: #252526; color: #cccccc; gridline-color: #383838; }
+        QHeaderView::section { background-color: #333333; color: #dddddd; padding: 4px; border: 1px solid #444444; }
+        QPushButton { background-color: #333333; color: #eeeeee; border: 1px solid #484848; padding: 5px 10px; }
+        QPushButton:hover { background-color: #ff6b35; color: #ffffff; }
+    )");
     auto *layout = new QVBoxLayout(this);
     m_table = new QTableWidget(this);
     m_table->setColumnCount(5);
