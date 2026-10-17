@@ -1,6 +1,9 @@
 #include <QtTest>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QDir>
+#include <QTemporaryDir>
+#include <QFile>
 #include "cinderde/language_pack.h"
 #include "cinderde/file_type_detector.h"
 #include "cinderde/syntax_highlighter.h"
@@ -42,6 +45,119 @@ private slots:
         QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(doc.object()));
     }
 
+    void testBuiltinDiscoveryAndRegressions() {
+        CinderDE::LanguageRegistry &registry = CinderDE::LanguageRegistry::instance();
+
+        // Built-in C, C++, Python must always be discoverable
+        QVERIFY(registry.hasDefinition("c"));
+        QVERIFY(registry.hasDefinition("cpp"));
+        QVERIFY(registry.hasDefinition("python"));
+
+        CinderDE::LanguageDefinition cDef = registry.definitionForId("c");
+        QVERIFY(cDef.isValid());
+        QCOMPARE(cDef.name, QString("C Source"));
+
+        CinderDE::LanguageDefinition cppDef = registry.definitionForId("cpp");
+        QVERIFY(cppDef.isValid());
+        QCOMPARE(cppDef.name, QString("C++ Source"));
+
+        CinderDE::LanguageDefinition pyDef = registry.definitionForId("python");
+        QVERIFY(pyDef.isValid());
+        QCOMPARE(pyDef.name, QString("Python Source"));
+    }
+
+    void testUserPackDirectoryCreationAndDiscovery() {
+        QString userDir = CinderDE::LanguageRegistry::userLanguagesDirectory();
+        QVERIFY(!userDir.isEmpty());
+        QVERIFY(QDir(userDir).exists());
+
+        QTemporaryDir tempUserDir;
+        QVERIFY(tempUserDir.isValid());
+
+        QString customPackPath = tempUserDir.filePath("sample.json");
+        QFile file(customPackPath);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+        QString json = R"({
+            "id": "samplelang",
+            "name": "Sample Language",
+            "extensions": ["smp"],
+            "keywords": ["sample_kw"]
+        })";
+        file.write(json.toUtf8());
+        file.close();
+
+        CinderDE::LanguageRegistry &registry = CinderDE::LanguageRegistry::instance();
+        int loaded = registry.loadFromDirectory(tempUserDir.path(), CinderDE::LanguagePackSource::User);
+        QCOMPARE(loaded, 1);
+        QVERIFY(registry.hasDefinition("samplelang"));
+
+        CinderDE::LanguageDefinition sampleDef = registry.definitionForExtension("smp");
+        QVERIFY(sampleDef.isValid());
+        QCOMPARE(sampleDef.name, QString("Sample Language"));
+    }
+
+    void testDuplicateIdentifierRejection() {
+        CinderDE::LanguageRegistry &registry = CinderDE::LanguageRegistry::instance();
+
+        // Try to register user pack with duplicate ID "cpp"
+        QString duplicateCppJson = R"({
+            "id": "cpp",
+            "name": "User Override CPP",
+            "extensions": ["cpp_override"]
+        })";
+
+        QJsonDocument doc = QJsonDocument::fromJson(duplicateCppJson.toUtf8());
+        QVERIFY(doc.isObject());
+        bool result = registry.loadFromJson(doc.object(), "user_cpp.json", CinderDE::LanguagePackSource::User);
+
+        QVERIFY(!result);
+        // Built-in definition remains untouched
+        QCOMPARE(registry.definitionForId("cpp").name, QString("C++ Source"));
+
+        // Check error reporting in packInfos
+        bool duplicateFound = false;
+        for (const auto &info : registry.packInfos()) {
+            if (info.id == "cpp" && !info.loaded) {
+                duplicateFound = true;
+                QVERIFY(info.statusMessage.contains("Duplicate identifier"));
+            }
+        }
+        QVERIFY(duplicateFound);
+    }
+
+    void testMalformedAndMissingFieldsHandling() {
+        // Missing required 'id'
+        QJsonObject obj1;
+        obj1["name"] = "No ID Language";
+        bool ok1 = true;
+        CinderDE::LanguageDefinition def1 = CinderDE::LanguageDefinition::fromJson(obj1, &ok1);
+        QVERIFY(!ok1);
+        QVERIFY(!def1.isValid());
+
+        // Invalid JSON file loading
+        QVERIFY(!CinderDE::LanguageRegistry::instance().loadFromFile("/path/to/nonexistent/file.json"));
+
+        // Malformed JSON string
+        QTemporaryDir tempDir;
+        QString badJsonPath = tempDir.filePath("bad.json");
+        QFile badFile(badJsonPath);
+        QVERIFY(badFile.open(QIODevice::WriteOnly | QIODevice::Text));
+        badFile.write("{ invalid json content ");
+        badFile.close();
+
+        QVERIFY(!CinderDE::LanguageRegistry::instance().loadFromFile(badJsonPath));
+
+        // Omitted optional fields defaulted safely
+        QJsonObject obj2;
+        obj2["id"] = "minimal";
+        obj2["name"] = "Minimal Lang";
+        bool ok2 = false;
+        CinderDE::LanguageDefinition def2 = CinderDE::LanguageDefinition::fromJson(obj2, &ok2);
+        QVERIFY(ok2);
+        QVERIFY(def2.isValid());
+        QCOMPARE(def2.indentation.tabSize, 4); // Default
+    }
+
     void testValidJsonParsing() {
         CinderDE::LanguageDefinition def = CinderDE::LanguageRegistry::instance().definitionForId("kekno");
         QVERIFY(def.isValid());
@@ -66,29 +182,6 @@ private slots:
 
         QCOMPARE(def.buildRun.buildCommand, QString("keknoc \"${file}\" -o \"${fileDir}/${fileBase}\""));
         QCOMPARE(def.buildRun.runCommand, QString("\"${fileDir}/${fileBase}\""));
-    }
-
-    void testMalformedAndMissingFieldsHandling() {
-        // Missing required 'id'
-        QJsonObject obj1;
-        obj1["name"] = "No ID Language";
-        bool ok1 = true;
-        CinderDE::LanguageDefinition def1 = CinderDE::LanguageDefinition::fromJson(obj1, &ok1);
-        QVERIFY(!ok1);
-        QVERIFY(!def1.isValid());
-
-        // Invalid JSON loading
-        QVERIFY(!CinderDE::LanguageRegistry::instance().loadFromFile("/path/to/nonexistent/file.json"));
-
-        // Omitted optional fields defaulted safely
-        QJsonObject obj2;
-        obj2["id"] = "minimal";
-        obj2["name"] = "Minimal Lang";
-        bool ok2 = false;
-        CinderDE::LanguageDefinition def2 = CinderDE::LanguageDefinition::fromJson(obj2, &ok2);
-        QVERIFY(ok2);
-        QVERIFY(def2.isValid());
-        QCOMPARE(def2.indentation.tabSize, 4); // Default
     }
 
     void testExtensionMatching() {

@@ -47,6 +47,9 @@ private slots:
     void showFind();
     void showReplace();
 
+    // Settings actions
+    void showPreferencesDialog();
+
     // View actions
     void toggleExplorer();
     void toggleWordWrap();
