@@ -59,6 +59,7 @@ private:
         QString languageId;
         int version = 1;
         bool isOpen = false;
+        bool didOpenSent = false;
         QString pendingText;
     };
     QMap<QString, OpenDocumentInfo> m_openDocs; // filePath -> info
