@@ -586,6 +586,10 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
         m_completionPopup->hide();
     }
 
+    // Invalidate any in-flight completion as soon as the editor changes, so
+    // an older response cannot replace suggestions for the current cursor.
+    ++m_completionRequestGeneration;
+
     // Debounce ordinary typing so language servers are not queried for every
     // keystroke. Trigger characters such as '.' request completion immediately.
     if (m_autoCompletionTimer && !e->text().isEmpty()) {
