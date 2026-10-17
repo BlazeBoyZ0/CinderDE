@@ -365,3 +365,18 @@ target_link_libraries(debugger_config_tests PRIVATE
 
 add_test(NAME DebuggerConfigTest COMMAND debugger_config_tests)
 
+add_executable(debugger_panel_tests
+    tests/test_debugger_panel.cpp
+    src/debugger_panel.cpp
+    include/cinderde/debugger_panel.h
+)
+
+target_link_libraries(debugger_panel_tests PRIVATE
+    Qt6::Widgets
+    Qt6::Core
+    Qt6::Test
+)
+
+add_test(NAME DebuggerPanelTest COMMAND debugger_panel_tests -platform offscreen)
+
+
