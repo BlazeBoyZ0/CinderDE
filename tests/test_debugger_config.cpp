@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include "cinderde/debugger_config.h"
 
@@ -30,7 +31,7 @@ void DebuggerConfigTest::roundTripWorkspaceConfigurations()
     config.arguments = {QStringLiteral("-m"), QStringLiteral("debugpy.adapter")};
     config.workingDirectory = QStringLiteral("src");
     config.fileExtensions = {QStringLiteral(".cpp"), QStringLiteral(".hpp")};
-    config.launchArgumentsJson = QStringLiteral("{\"program\":\"\u0024{program}\",\"cwd\":\"\u0024{workspace}\"}");
+    config.launchArgumentsJson = QStringLiteral(R"({"program":"${program}","cwd":"${workspace}"})");
     config.enabled = true;
 
     QVERIFY(DebuggerConfigStore::save(workspace.path(), {config}));
