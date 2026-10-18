@@ -143,10 +143,13 @@ DebuggerConfiguration DebuggerConfigEditDialog::configuration() const
     DebuggerConfiguration config;
     config.id = m_id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : m_id;
     config.name = m_nameEdit->text().trimmed();
-    config.languageId = m_languageCombo->currentText().trimmed();
-    if (!m_languageCombo->currentData().toString().isEmpty() &&
-        m_languageCombo->currentText() == m_languageCombo->currentData().toString()) {
-        config.languageId = m_languageCombo->currentData().toString();
+    const int languageIndex = m_languageCombo->currentIndex();
+    if (languageIndex >= 0 &&
+        m_languageCombo->currentText() == m_languageCombo->itemText(languageIndex) &&
+        !m_languageCombo->itemData(languageIndex).toString().isEmpty()) {
+        config.languageId = m_languageCombo->itemData(languageIndex).toString();
+    } else {
+        config.languageId = m_languageCombo->currentText().trimmed();
     }
     config.executable = m_executableEdit->text().trimmed();
     config.runtimeExecutable = m_runtimeExecutableEdit->text().trimmed();
