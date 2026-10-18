@@ -74,7 +74,7 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     m_argumentsEdit = new QLineEdit(config.arguments.join(QLatin1Char(' ')), this);
     m_argumentsEdit->setPlaceholderText(QStringLiteral("Adapter arguments separated by spaces"));
     m_extensionsEdit = new QLineEdit(config.fileExtensions.join(QLatin1Char(',')), this);
-    if (config.fileExtensions.isEmpty() && config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0)
+    if (config.fileExtensions.isEmpty() && (config.id.isEmpty() || config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0))
         m_extensionsEdit->setText(QStringLiteral(".py"));
     m_extensionsEdit->setPlaceholderText(QStringLiteral("Comma-separated, e.g. .cpp,.cc,.h"));
     m_launchArgumentsEdit = new QLineEdit(config.launchArgumentsJson, this);
