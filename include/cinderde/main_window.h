@@ -100,7 +100,7 @@ private:
     QTabWidget *m_tabWidget;
     OutputPanel *m_outputPanel;
     BuildRunManager *m_buildRunManager;
-    DebuggerController *m_debuggerController
+    DebuggerController *m_debuggerController;
     QDockWidget *m_debuggerDock;
     DebuggerPanel *m_debuggerPanel;
 
