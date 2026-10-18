@@ -67,7 +67,7 @@ DebuggerController::DebuggerController(QObject *parent)
                         continue;
                     QString value = it.value().toString();
                     value.replace(QStringLiteral("${program}"), m_programPath);
-                    value.replace(QStringLiteral("${workspace}"), m_workingDirectory);
+                    value.replace(QStringLiteral("${workspace}"), m_workspacePath);
                     value.replace(QStringLiteral("${runtime}"), m_runtimeExecutable);
                     it.value() = value;
                 }
@@ -242,6 +242,7 @@ bool DebuggerController::start(const DebuggerConfiguration &config, const QStrin
     m_launchArgumentsJson = config.launchArgumentsJson.trimmed();
     if (!m_runtimeExecutable.isEmpty() && !QDir::isAbsolutePath(m_runtimeExecutable))
         m_runtimeExecutable = QDir(workspacePath).absoluteFilePath(m_runtimeExecutable);
+    m_workspacePath = QDir(workspacePath).absolutePath();
     m_workingDirectory = config.workingDirectory.trimmed().isEmpty()
         ? (workspacePath.isEmpty() ? programInfo.absolutePath() : QDir(workspacePath).absolutePath())
         : (QDir::isAbsolutePath(config.workingDirectory)
