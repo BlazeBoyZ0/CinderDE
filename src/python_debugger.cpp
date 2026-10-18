@@ -152,7 +152,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
                     {QStringLiteral("restart"), false},
                     {QStringLiteral("terminateDebuggee"), false}
                 });
-                QTimer::singleShot(1500, this, [this]() {
+                QTimer::singleShot(5000, this, [this]() {
                     if (m_client->isRunning())
                         m_client->stop();
                 });
@@ -335,7 +335,7 @@ void PythonDebugger::stop()
             {QStringLiteral("restart"), false},
             {QStringLiteral("terminateDebuggee"), true}
         });
-        QTimer::singleShot(1500, this, [this]() {
+        QTimer::singleShot(5000, this, [this]() {
             if (m_client->isRunning())
                 m_client->stop();
         });
