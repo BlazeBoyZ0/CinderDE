@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QPaintEvent>
+#include <QMouseEvent>
 #include <QResizeEvent>
 #include <QTimer>
 #include <QSet>
@@ -29,6 +30,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
 private:
     CodeEditor *m_editor;
@@ -45,6 +47,7 @@ public:
     void setEditorFontSize(int size);
     void setEditorTabSize(int size);
     void toggleBreakpoint(int line);
+    void toggleBreakpointAtY(int y);
     QSet<int> breakpointLines() const { return m_breakpointLines; }
     void setBreakpoints(const QSet<int> &lines);
 
