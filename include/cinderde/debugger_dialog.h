@@ -25,6 +25,8 @@ private:
     QLineEdit *m_executableEdit;
     QLineEdit *m_runtimeExecutableEdit;
     QLineEdit *m_argumentsEdit;
+    QLineEdit *m_extensionsEdit;
+    QLineEdit *m_launchArgumentsEdit;
     QLineEdit *m_workingDirectoryEdit;
     QCheckBox *m_enabledCheck;
     QString m_id;
