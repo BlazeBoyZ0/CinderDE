@@ -28,6 +28,15 @@ QSize LineNumberArea::sizeHint() const {
     return QSize(m_editor->lineNumberAreaWidth(), 0);
 }
 
+void LineNumberArea::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton) {
+        m_editor->toggleBreakpointAtY(event->pos().y());
+        event->accept();
+        return;
+    }
+    QWidget::mousePressEvent(event);
+}
+
 void LineNumberArea::paintEvent(QPaintEvent *event) {
     m_editor->lineNumberAreaPaintEvent(event);
 }
@@ -110,6 +119,22 @@ void CodeEditor::toggleBreakpoint(int line) {
     else
         m_breakpointLines.insert(line);
     m_lineNumberArea->update();
+}
+
+void CodeEditor::toggleBreakpointAtY(int y) {
+    QTextBlock block = firstVisibleBlock();
+    int top = qRound(blockBoundingGeometry(block).translated(contentOffset()).top());
+    int bottom = top + qRound(blockBoundingRect(block).height());
+
+    while (block.isValid()) {
+        if (block.isVisible() && y >= top && y < bottom) {
+            toggleBreakpoint(block.blockNumber() + 1);
+            return;
+        }
+        block = block.next();
+        top = bottom;
+        bottom = top + qRound(blockBoundingRect(block).height());
+    }
 }
 
 void CodeEditor::setBreakpoints(const QSet<int> &lines) {
