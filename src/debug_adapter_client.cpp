@@ -53,6 +53,12 @@ void DebugAdapterClient::stop()
     m_buffer.clear();
 }
 
+void DebugAdapterClient::closeInput()
+{
+    if (m_process->state() != QProcess::NotRunning)
+        m_process->closeWriteChannel();
+}
+
 bool DebugAdapterClient::isRunning() const
 {
     return m_process->state() != QProcess::NotRunning;
