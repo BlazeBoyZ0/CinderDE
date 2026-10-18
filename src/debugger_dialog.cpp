@@ -34,9 +34,20 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     auto *layout = new QVBoxLayout(this);
     auto *form = new QFormLayout;
     m_nameEdit = new QLineEdit(config.name, this);
-    m_nameEdit->setPlaceholderText(QStringLiteral("e.g. Python debugpy"));
+    m_nameEdit->setPlaceholderText(QStringLiteral("e.g. C++ GDB, Python debugpy, Kotlin adapter"));
     m_languageCombo = new QComboBox(this);
+    m_languageCombo->setEditable(true);
+    m_languageCombo->setInsertPolicy(QComboBox::NoInsert);
     m_languageCombo->addItem(QStringLiteral("Python"), QStringLiteral("python"));
+    m_languageCombo->addItem(QStringLiteral("C++"), QStringLiteral("cpp"));
+    m_languageCombo->addItem(QStringLiteral("C"), QStringLiteral("c"));
+    m_languageCombo->addItem(QStringLiteral("Kotlin"), QStringLiteral("kotlin"));
+    m_languageCombo->addItem(QStringLiteral("Java"), QStringLiteral("java"));
+    m_languageCombo->addItem(QStringLiteral("JavaScript"), QStringLiteral("javascript"));
+    m_languageCombo->addItem(QStringLiteral("Rust"), QStringLiteral("rust"));
+    m_languageCombo->addItem(QStringLiteral("Go"), QStringLiteral("go"));
+    if (!config.languageId.isEmpty() && m_languageCombo->findData(config.languageId) < 0)
+        m_languageCombo->setEditText(config.languageId);
     const int languageIndex = m_languageCombo->findData(config.languageId);
     if (languageIndex >= 0)
         m_languageCombo->setCurrentIndex(languageIndex);
@@ -51,7 +62,7 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
 
     auto *runtimeRow = new QHBoxLayout;
     m_runtimeExecutableEdit = new QLineEdit(config.runtimeExecutable, this);
-    m_runtimeExecutableEdit->setPlaceholderText(QStringLiteral("Optional interpreter, e.g. .venv/bin/python"));
+    m_runtimeExecutableEdit->setPlaceholderText(QStringLiteral("Optional runtime / interpreter path"));
     auto *browseRuntimeButton = new QPushButton(QStringLiteral("Browse..."), this);
     runtimeRow->addWidget(m_runtimeExecutableEdit, 1);
     runtimeRow->addWidget(browseRuntimeButton);
@@ -71,7 +82,7 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     form->addRow(QStringLiteral("Name:"), m_nameEdit);
     form->addRow(QStringLiteral("Language:"), m_languageCombo);
     form->addRow(QStringLiteral("Adapter executable:"), executableRow);
-    form->addRow(QStringLiteral("Python runtime:"), runtimeRow);
+    form->addRow(QStringLiteral("Runtime / interpreter (optional):"), runtimeRow);
     form->addRow(QStringLiteral("Arguments:"), m_argumentsEdit);
     form->addRow(QStringLiteral("Working directory:"), directoryRow);
     form->addRow(QString(), m_enabledCheck);
@@ -92,7 +103,7 @@ void DebuggerConfigEditDialog::browseExecutable()
 
 void DebuggerConfigEditDialog::browseRuntimeExecutable()
 {
-    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Select Python Runtime"));
+    const QString path = QFileDialog::getOpenFileName(this, QStringLiteral("Select Runtime / Interpreter"));
     if (!path.isEmpty())
         m_runtimeExecutableEdit->setText(path);
 }
@@ -132,7 +143,11 @@ DebuggerConfiguration DebuggerConfigEditDialog::configuration() const
     DebuggerConfiguration config;
     config.id = m_id.isEmpty() ? QUuid::createUuid().toString(QUuid::WithoutBraces) : m_id;
     config.name = m_nameEdit->text().trimmed();
-    config.languageId = m_languageCombo->currentData().toString();
+    config.languageId = m_languageCombo->currentText().trimmed();
+    if (!m_languageCombo->currentData().toString().isEmpty() &&
+        m_languageCombo->currentText() == m_languageCombo->currentData().toString()) {
+        config.languageId = m_languageCombo->currentData().toString();
+    }
     config.executable = m_executableEdit->text().trimmed();
     config.runtimeExecutable = m_runtimeExecutableEdit->text().trimmed();
     config.arguments = m_argumentsEdit->text().split(QLatin1Char(' '), Qt::SkipEmptyParts);
@@ -158,7 +173,7 @@ DebuggerDialog::DebuggerDialog(const QString &workspacePath, QWidget *parent)
     m_table = new QTableWidget(this);
     m_table->setColumnCount(6);
     m_table->setHorizontalHeaderLabels({QStringLiteral("Name"), QStringLiteral("Language"),
-                                        QStringLiteral("Adapter"), QStringLiteral("Python Runtime"),
+                                        QStringLiteral("Adapter"), QStringLiteral("Runtime / Interpreter"),
                                         QStringLiteral("Enabled"), QStringLiteral("Working Directory")});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
