@@ -103,9 +103,10 @@ PythonDebugger::PythonDebugger(QObject *parent)
                                 .arg(scopeName.isEmpty() ? QStringLiteral("Variables") : scopeName,
                                      lines.join(QLatin1Char('\n'))));
         } else if (command == QStringLiteral("disconnect")) {
-            // A successful DAP disconnect response is not a reason to terminate
-            // the adapter immediately. Let it exit naturally; stop() already
-            // scheduled a timeout fallback in case it remains alive.
+            // The adapter may keep its stdio transport alive after responding
+            // to disconnect. Close stdin (EOF) so it can finish naturally;
+            // stop() has a timeout fallback if the process still remains alive.
+            m_client->closeInput();
         }
     });
 
