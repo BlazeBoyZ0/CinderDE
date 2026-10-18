@@ -14,6 +14,9 @@
 #include <QVBoxLayout>
 #include <QFileInfo>
 #include <QUuid>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QJsonObject>
 
 namespace CinderDE {
 
@@ -69,7 +72,13 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     connect(browseRuntimeButton, &QPushButton::clicked, this, [this]() { browseRuntimeExecutable(); });
 
     m_argumentsEdit = new QLineEdit(config.arguments.join(QLatin1Char(' ')), this);
-    m_argumentsEdit->setPlaceholderText(QStringLiteral("Arguments separated by spaces"));
+    m_argumentsEdit->setPlaceholderText(QStringLiteral("Adapter arguments separated by spaces"));
+    m_extensionsEdit = new QLineEdit(config.fileExtensions.join(QLatin1Char(',')), this);
+    if (config.fileExtensions.isEmpty() && config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0)
+        m_extensionsEdit->setText(QStringLiteral(".py"));
+    m_extensionsEdit->setPlaceholderText(QStringLiteral("Comma-separated, e.g. .cpp,.cc,.h"));
+    m_launchArgumentsEdit = new QLineEdit(config.launchArgumentsJson, this);
+    m_launchArgumentsEdit->setPlaceholderText(QStringLiteral("Optional JSON object; use ${program}, ${workspace}, ${runtime}"));
     auto *directoryRow = new QHBoxLayout;
     m_workingDirectoryEdit = new QLineEdit(config.workingDirectory, this);
     auto *browseDirectoryButton = new QPushButton(QStringLiteral("Browse..."), this);
@@ -83,7 +92,9 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     form->addRow(QStringLiteral("Language:"), m_languageCombo);
     form->addRow(QStringLiteral("Adapter executable:"), executableRow);
     form->addRow(QStringLiteral("Runtime / interpreter (optional):"), runtimeRow);
-    form->addRow(QStringLiteral("Arguments:"), m_argumentsEdit);
+    form->addRow(QStringLiteral("Adapter arguments:"), m_argumentsEdit);
+    form->addRow(QStringLiteral("File extensions:"), m_extensionsEdit);
+    form->addRow(QStringLiteral("DAP launch arguments (JSON, optional):"), m_launchArgumentsEdit);
     form->addRow(QStringLiteral("Working directory:"), directoryRow);
     form->addRow(QString(), m_enabledCheck);
     layout->addLayout(form);
@@ -135,6 +146,16 @@ void DebuggerConfigEditDialog::validateAndAccept()
         if (choice != QMessageBox::Yes)
             return;
     }
+    const QString launchJson = m_launchArgumentsEdit->text().trimmed();
+    if (!launchJson.isEmpty()) {
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(launchJson.toUtf8(), &parseError);
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            QMessageBox::warning(this, QStringLiteral("Invalid Launch Arguments"),
+                                 QStringLiteral("DAP launch arguments must be a valid JSON object."));
+            return;
+        }
+    }
     accept();
 }
 
@@ -154,6 +175,14 @@ DebuggerConfiguration DebuggerConfigEditDialog::configuration() const
     config.executable = m_executableEdit->text().trimmed();
     config.runtimeExecutable = m_runtimeExecutableEdit->text().trimmed();
     config.arguments = m_argumentsEdit->text().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    for (QString extension : m_extensionsEdit->text().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+        extension = extension.trimmed().toLower();
+        if (!extension.isEmpty() && !extension.startsWith(QLatin1Char('.')))
+            extension.prepend(QLatin1Char('.'));
+        if (!extension.isEmpty() && !config.fileExtensions.contains(extension))
+            config.fileExtensions.append(extension);
+    }
+    config.launchArgumentsJson = m_launchArgumentsEdit->text().trimmed();
     config.workingDirectory = m_workingDirectoryEdit->text().trimmed();
     config.enabled = m_enabledCheck->isChecked();
     return config;
@@ -174,16 +203,18 @@ DebuggerDialog::DebuggerDialog(const QString &workspacePath, QWidget *parent)
     )");
     auto *layout = new QVBoxLayout(this);
     m_table = new QTableWidget(this);
-    m_table->setColumnCount(6);
+    m_table->setColumnCount(7);
     m_table->setHorizontalHeaderLabels({QStringLiteral("Name"), QStringLiteral("Language"),
-                                        QStringLiteral("Adapter"), QStringLiteral("Runtime / Interpreter"),
-                                        QStringLiteral("Enabled"), QStringLiteral("Working Directory")});
+                                        QStringLiteral("Extensions"), QStringLiteral("Adapter"),
+                                        QStringLiteral("Runtime / Interpreter"), QStringLiteral("Enabled"),
+                                        QStringLiteral("Working Directory")});
     m_table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
     m_table->horizontalHeader()->setSectionResizeMode(3, QHeaderView::Stretch);
-    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
-    m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(4, QHeaderView::Stretch);
+    m_table->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_table->horizontalHeader()->setSectionResizeMode(6, QHeaderView::Stretch);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -233,10 +264,11 @@ void DebuggerDialog::refreshTable()
         m_table->insertRow(row);
         m_table->setItem(row, 0, new QTableWidgetItem(config.name));
         m_table->setItem(row, 1, new QTableWidgetItem(config.languageId));
-        m_table->setItem(row, 2, new QTableWidgetItem(config.executable));
-        m_table->setItem(row, 3, new QTableWidgetItem(config.runtimeExecutable));
-        m_table->setItem(row, 4, new QTableWidgetItem(config.enabled ? QStringLiteral("Yes") : QStringLiteral("No")));
-        m_table->setItem(row, 5, new QTableWidgetItem(config.workingDirectory));
+        m_table->setItem(row, 2, new QTableWidgetItem(config.fileExtensions.join(QLatin1Char(','))));
+        m_table->setItem(row, 3, new QTableWidgetItem(config.executable));
+        m_table->setItem(row, 4, new QTableWidgetItem(config.runtimeExecutable));
+        m_table->setItem(row, 5, new QTableWidgetItem(config.enabled ? QStringLiteral("Yes") : QStringLiteral("No")));
+        m_table->setItem(row, 6, new QTableWidgetItem(config.workingDirectory));
     }
     const bool selected = selectedRow() >= 0;
     m_editButton->setEnabled(selected);
