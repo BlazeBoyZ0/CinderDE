@@ -14,6 +14,8 @@ struct DebuggerConfiguration {
     QString executable;
     QString runtimeExecutable;
     QStringList arguments;
+    QStringList fileExtensions;
+    QString launchArgumentsJson;
     QString workingDirectory;
     bool enabled = true;
 };
