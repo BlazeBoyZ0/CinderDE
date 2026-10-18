@@ -44,6 +44,21 @@ QList<DebuggerConfiguration> DebuggerConfigStore::load(const QString &workspaceP
         config.executable = object.value(QStringLiteral("executable")).toString();
         config.runtimeExecutable = object.value(QStringLiteral("runtimeExecutable")).toString();
         config.workingDirectory = object.value(QStringLiteral("workingDirectory")).toString();
+        config.launchArgumentsJson = object.value(QStringLiteral("launchArgumentsJson")).toString();
+        for (const QJsonValue &extension : object.value(QStringLiteral("fileExtensions")).toArray()) {
+            if (!extension.isString())
+                continue;
+            QString normalized = extension.toString().trimmed().toLower();
+            if (!normalized.isEmpty() && !normalized.startsWith(QLatin1Char('.')))
+                normalized.prepend(QLatin1Char('.'));
+            if (!normalized.isEmpty() && !config.fileExtensions.contains(normalized))
+                config.fileExtensions.append(normalized);
+        }
+        // Preserve compatibility with debugger settings saved before extensions
+        // were configurable: existing Python adapters continue to handle .py.
+        if (config.fileExtensions.isEmpty() &&
+            config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0)
+            config.fileExtensions.append(QStringLiteral(".py"));
         config.enabled = object.value(QStringLiteral("enabled")).toBool(true);
         for (const QJsonValue &argument : object.value(QStringLiteral("arguments")).toArray()) {
             if (argument.isString())
@@ -71,6 +86,14 @@ bool DebuggerConfigStore::save(const QString &workspacePath,
         QJsonArray arguments;
         for (const QString &argument : config.arguments)
             arguments.append(argument);
+        QJsonArray extensions;
+        for (QString extension : config.fileExtensions) {
+            extension = extension.trimmed().toLower();
+            if (!extension.isEmpty() && !extension.startsWith(QLatin1Char('.')))
+                extension.prepend(QLatin1Char('.'));
+            if (!extension.isEmpty() && !extensions.contains(extension))
+                extensions.append(extension);
+        }
         array.append(QJsonObject{
             {QStringLiteral("id"), config.id},
             {QStringLiteral("name"), config.name},
@@ -78,6 +101,8 @@ bool DebuggerConfigStore::save(const QString &workspacePath,
             {QStringLiteral("executable"), config.executable},
             {QStringLiteral("runtimeExecutable"), config.runtimeExecutable},
             {QStringLiteral("arguments"), arguments},
+            {QStringLiteral("fileExtensions"), extensions},
+            {QStringLiteral("launchArgumentsJson"), config.launchArgumentsJson},
             {QStringLiteral("workingDirectory"), config.workingDirectory},
             {QStringLiteral("enabled"), config.enabled}
         });
