@@ -21,6 +21,7 @@ public:
     bool start(const QString &program, const QStringList &arguments = QStringList(),
                const QString &workingDirectory = QString());
     void stop();
+    void closeInput();
     bool isRunning() const;
     int sendRequest(const QString &command, const QJsonObject &arguments = QJsonObject());
     void sendResponse(int requestSeq, const QString &command, bool success,
