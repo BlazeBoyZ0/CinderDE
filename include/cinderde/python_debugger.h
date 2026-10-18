@@ -44,6 +44,7 @@ private:
     QString m_programPath;
     QString m_runtimeExecutable;
     QString m_workingDirectory;
+    QString m_workspacePath;
     QString m_languageId;
     QString m_launchArgumentsJson;
     QSet<int> m_breakpointLines;
