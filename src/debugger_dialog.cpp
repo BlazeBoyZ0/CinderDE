@@ -77,8 +77,30 @@ DebuggerConfigEditDialog::DebuggerConfigEditDialog(const DebuggerConfiguration &
     if (config.fileExtensions.isEmpty() && (config.id.isEmpty() || config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0))
         m_extensionsEdit->setText(QStringLiteral(".py"));
     m_extensionsEdit->setPlaceholderText(QStringLiteral("Comma-separated, e.g. .cpp,.cc,.h"));
+    connect(m_languageCombo, &QComboBox::currentTextChanged, this, [this](const QString &language) {
+        const QString current = m_extensionsEdit->text().trimmed().toLower();
+        const QStringList knownDefaults = {QStringLiteral(".py"), QStringLiteral(".cpp"),
+            QStringLiteral(".c"), QStringLiteral(".kt"), QStringLiteral(".java"),
+            QStringLiteral(".js"), QStringLiteral(".rs"), QStringLiteral(".go")};
+        if (!current.isEmpty() && !knownDefaults.contains(current))
+            return;
+        QString extension;
+        if (language.compare(QStringLiteral("Python"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".py");
+        else if (language.compare(QStringLiteral("C++"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".cpp");
+        else if (language.compare(QStringLiteral("C"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".c");
+        else if (language.compare(QStringLiteral("Kotlin"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".kt");
+        else if (language.compare(QStringLiteral("Java"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".java");
+        else if (language.compare(QStringLiteral("JavaScript"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".js");
+        else if (language.compare(QStringLiteral("Rust"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".rs");
+        else if (language.compare(QStringLiteral("Go"), Qt::CaseInsensitive) == 0) extension = QStringLiteral(".go");
+        m_extensionsEdit->setText(extension);
+    });
     m_launchArgumentsEdit = new QLineEdit(config.launchArgumentsJson, this);
     m_launchArgumentsEdit->setPlaceholderText(QStringLiteral("Optional JSON object; use ${program}, ${workspace}, ${runtime}"));
+    m_launchArgumentsEdit->setToolTip(QStringLiteral(
+        "Adapter-specific DAP launch arguments as a JSON object. Example: "
+        "{\"program\":\"${program}\",\"cwd\":\"${workspace}\",\"stopOnEntry\":false}. "
+        "Placeholders: ${program}, ${workspace}, ${runtime}."));
     auto *directoryRow = new QHBoxLayout;
     m_workingDirectoryEdit = new QLineEdit(config.workingDirectory, this);
     auto *browseDirectoryButton = new QPushButton(QStringLiteral("Browse..."), this);
