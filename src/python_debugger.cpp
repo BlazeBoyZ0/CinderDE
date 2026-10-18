@@ -142,8 +142,19 @@ PythonDebugger::PythonDebugger(QObject *parent)
                 body.value(QStringLiteral("exitCode")).toInt()));
         } else if (event == QStringLiteral("terminated")) {
             emit outputReceived(QStringLiteral("Debugging session terminated."));
-            if (m_client->isRunning())
-                m_client->stop();
+            // Ask the adapter to close the DAP session cleanly instead of terminating
+            // its process while it may still be writing a protocol frame.
+            if (m_client->isRunning() && !m_stopping) {
+                m_stopping = true;
+                m_client->sendRequest(QStringLiteral("disconnect"), QJsonObject{
+                    {QStringLiteral("restart"), false},
+                    {QStringLiteral("terminateDebuggee"), false}
+                });
+                QTimer::singleShot(1500, this, [this]() {
+                    if (m_client->isRunning())
+                        m_client->stop();
+                });
+            }
         } else if (event == QStringLiteral("thread")) {
             const int threadId = body.value(QStringLiteral("threadId")).toInt();
             if (body.value(QStringLiteral("reason")).toString() == QStringLiteral("started"))
