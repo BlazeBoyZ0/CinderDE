@@ -103,7 +103,9 @@ PythonDebugger::PythonDebugger(QObject *parent)
                                 .arg(scopeName.isEmpty() ? QStringLiteral("Variables") : scopeName,
                                      lines.join(QLatin1Char('\n'))));
         } else if (command == QStringLiteral("disconnect")) {
-            m_client->stop();
+            // A successful DAP disconnect response is not a reason to terminate
+            // the adapter immediately. Let it exit naturally; stop() already
+            // scheduled a timeout fallback in case it remains alive.
         }
     });
 
