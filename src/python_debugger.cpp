@@ -3,13 +3,14 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonParseError>
 #include <QDir>
 #include <QProcess>
 #include <QTimer>
 
 namespace CinderDE {
 
-PythonDebugger::PythonDebugger(QObject *parent)
+DebuggerController::DebuggerController(QObject *parent)
     : QObject(parent), m_client(new DebugAdapterClient(this))
 {
     connect(m_client, &DebugAdapterClient::started, this, [this]() {
@@ -17,7 +18,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
         m_client->sendRequest(QStringLiteral("initialize"), QJsonObject{
             {QStringLiteral("clientID"), QStringLiteral("cinderde")},
             {QStringLiteral("clientName"), QStringLiteral("CinderDE")},
-            {QStringLiteral("adapterID"), QStringLiteral("python")},
+            {QStringLiteral("adapterID"), m_languageId.isEmpty() ? QStringLiteral("custom") : m_languageId},
             {QStringLiteral("pathFormat"), QStringLiteral("path")},
             {QStringLiteral("linesStartAt1"), true},
             {QStringLiteral("columnsStartAt1"), true},
@@ -48,15 +49,41 @@ PythonDebugger::PythonDebugger(QObject *parent)
         }
 
         if (command == QStringLiteral("initialize")) {
-            QJsonObject launchArguments{
-                {QStringLiteral("program"), m_programPath},
-                {QStringLiteral("cwd"), m_workingDirectory},
-                {QStringLiteral("console"), QStringLiteral("internalConsole")},
-                {QStringLiteral("justMyCode"), true},
-                {QStringLiteral("stopOnEntry"), false}
-            };
-            if (!m_runtimeExecutable.isEmpty())
-                launchArguments.insert(QStringLiteral("python"), m_runtimeExecutable);
+            QJsonObject launchArguments;
+            if (!m_launchArgumentsJson.trimmed().isEmpty()) {
+                QJsonParseError parseError;
+                const QJsonDocument launchDocument = QJsonDocument::fromJson(
+                    m_launchArgumentsJson.toUtf8(), &parseError);
+                if (parseError.error != QJsonParseError::NoError || !launchDocument.isObject()) {
+                    emit outputReceived(QStringLiteral("Invalid DAP launch arguments JSON: %1")
+                                        .arg(parseError.errorString()));
+                    m_stopping = true;
+                    m_client->stop();
+                    return;
+                }
+                launchArguments = launchDocument.object();
+                for (auto it = launchArguments.begin(); it != launchArguments.end(); ++it) {
+                    if (!it.value().isString())
+                        continue;
+                    QString value = it.value().toString();
+                    value.replace(QStringLiteral("${program}"), m_programPath);
+                    value.replace(QStringLiteral("${workspace}"), m_workingDirectory);
+                    value.replace(QStringLiteral("${runtime}"), m_runtimeExecutable);
+                    it.value() = value;
+                }
+            } else {
+                launchArguments = QJsonObject{
+                    {QStringLiteral("program"), m_programPath},
+                    {QStringLiteral("cwd"), m_workingDirectory},
+                    {QStringLiteral("stopOnEntry"), false}
+                };
+                if (m_languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0) {
+                    launchArguments.insert(QStringLiteral("console"), QStringLiteral("internalConsole"));
+                    launchArguments.insert(QStringLiteral("justMyCode"), true);
+                    if (!m_runtimeExecutable.isEmpty())
+                        launchArguments.insert(QStringLiteral("python"), m_runtimeExecutable);
+                }
+            }
             m_client->sendRequest(QStringLiteral("launch"), launchArguments);
         } else if (command == QStringLiteral("setBreakpoints")) {
             emit outputReceived(QStringLiteral("Breakpoints configured."));
@@ -194,7 +221,7 @@ PythonDebugger::PythonDebugger(QObject *parent)
     });
 }
 
-bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &programPath,
+bool DebuggerController::start(const DebuggerConfiguration &config, const QString &programPath,
                            const QString &workspacePath, const QSet<int> &breakpointLines)
 {
     if (m_client->isRunning() || m_launching)
@@ -211,6 +238,8 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
 
     m_programPath = programInfo.absoluteFilePath();
     m_runtimeExecutable = config.runtimeExecutable.trimmed();
+    m_languageId = config.languageId.trimmed().toLower();
+    m_launchArgumentsJson = config.launchArgumentsJson.trimmed();
     if (!m_runtimeExecutable.isEmpty() && !QDir::isAbsolutePath(m_runtimeExecutable))
         m_runtimeExecutable = QDir(workspacePath).absoluteFilePath(m_runtimeExecutable);
     m_workingDirectory = config.workingDirectory.trimmed().isEmpty()
@@ -241,12 +270,12 @@ bool PythonDebugger::start(const DebuggerConfiguration &config, const QString &p
     return true;
 }
 
-bool PythonDebugger::isActive() const
+bool DebuggerController::isActive() const
 {
     return m_client->isRunning() || m_launching;
 }
 
-void PythonDebugger::sendBreakpoints()
+void DebuggerController::sendBreakpoints()
 {
     if (!m_initialized)
         return;
@@ -262,13 +291,13 @@ void PythonDebugger::sendBreakpoints()
     });
 }
 
-void PythonDebugger::setBreakpoints(const QSet<int> &lines)
+void DebuggerController::setBreakpoints(const QSet<int> &lines)
 {
     m_breakpointLines = lines;
     sendBreakpoints();
 }
 
-void PythonDebugger::requestStackTrace(int threadId)
+void DebuggerController::requestStackTrace(int threadId)
 {
     if (threadId <= 0)
         return;
@@ -279,12 +308,12 @@ void PythonDebugger::requestStackTrace(int threadId)
     });
 }
 
-void PythonDebugger::requestScopes(int frameId)
+void DebuggerController::requestScopes(int frameId)
 {
     m_client->sendRequest(QStringLiteral("scopes"), QJsonObject{{QStringLiteral("frameId"), frameId}});
 }
 
-void PythonDebugger::requestVariables(int variablesReference, const QString &scopeName)
+void DebuggerController::requestVariables(int variablesReference, const QString &scopeName)
 {
     const int requestSeq = m_client->sendRequest(QStringLiteral("variables"), QJsonObject{
         {QStringLiteral("variablesReference"), variablesReference}
@@ -293,37 +322,37 @@ void PythonDebugger::requestVariables(int variablesReference, const QString &sco
     m_variableRequestReferences.insert(requestSeq, variablesReference);
 }
 
-void PythonDebugger::continueExecution()
+void DebuggerController::continueExecution()
 {
     if (m_initialized && m_threadId > 0)
         m_client->sendRequest(QStringLiteral("continue"), QJsonObject{{QStringLiteral("threadId"), m_threadId}});
 }
 
-void PythonDebugger::pauseExecution()
+void DebuggerController::pauseExecution()
 {
     if (m_initialized && m_threadId > 0)
         m_client->sendRequest(QStringLiteral("pause"), QJsonObject{{QStringLiteral("threadId"), m_threadId}});
 }
 
-void PythonDebugger::stepOver()
+void DebuggerController::stepOver()
 {
     if (m_initialized && m_threadId > 0)
         m_client->sendRequest(QStringLiteral("next"), QJsonObject{{QStringLiteral("threadId"), m_threadId}});
 }
 
-void PythonDebugger::stepInto()
+void DebuggerController::stepInto()
 {
     if (m_initialized && m_threadId > 0)
         m_client->sendRequest(QStringLiteral("stepIn"), QJsonObject{{QStringLiteral("threadId"), m_threadId}});
 }
 
-void PythonDebugger::stepOut()
+void DebuggerController::stepOut()
 {
     if (m_initialized && m_threadId > 0)
         m_client->sendRequest(QStringLiteral("stepOut"), QJsonObject{{QStringLiteral("threadId"), m_threadId}});
 }
 
-void PythonDebugger::stop()
+void DebuggerController::stop()
 {
     if (!m_client->isRunning()) {
         m_launching = false;
@@ -345,7 +374,7 @@ void PythonDebugger::stop()
     }
 }
 
-void PythonDebugger::selectFrame(int frameId, const QString &path, int line)
+void DebuggerController::selectFrame(int frameId, const QString &path, int line)
 {
     if (!m_initialized || frameId <= 0)
         return;
@@ -355,13 +384,13 @@ void PythonDebugger::selectFrame(int frameId, const QString &path, int line)
     requestScopes(frameId);
 }
 
-void PythonDebugger::expandVariables(int variablesReference, const QString &name)
+void DebuggerController::expandVariables(int variablesReference, const QString &name)
 {
     if (m_initialized && variablesReference > 0)
         requestVariables(variablesReference, name);
 }
 
-void PythonDebugger::reportResponseFailure(const QString &command, const QString &message)
+void DebuggerController::reportResponseFailure(const QString &command, const QString &message)
 {
     emit outputReceived(QStringLiteral("Debugger request '%1' failed: %2")
                         .arg(command, message.isEmpty() ? QStringLiteral("unspecified adapter error") : message));
