@@ -12,10 +12,10 @@
 
 namespace CinderDE {
 
-class PythonDebugger : public QObject {
+class DebuggerController : public QObject {
     Q_OBJECT
 public:
-    explicit PythonDebugger(QObject *parent = nullptr);
+    explicit DebuggerController(QObject *parent = nullptr);
     bool start(const DebuggerConfiguration &config, const QString &programPath,
                const QString &workspacePath, const QSet<int> &breakpointLines);
     bool isActive() const;
@@ -44,6 +44,8 @@ private:
     QString m_programPath;
     QString m_runtimeExecutable;
     QString m_workingDirectory;
+    QString m_languageId;
+    QString m_launchArgumentsJson;
     QSet<int> m_breakpointLines;
     int m_threadId = 0;
     int m_frameId = 0;
