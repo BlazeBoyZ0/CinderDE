@@ -13,6 +13,7 @@ class DebuggerConfigTest : public QObject {
 private slots:
     void roundTripWorkspaceConfigurations();
     void preserveExistingWorkspaceSettings();
+    void legacyPythonConfigurationDefaultsToPyExtension();
 };
 
 void DebuggerConfigTest::roundTripWorkspaceConfigurations()
@@ -28,6 +29,8 @@ void DebuggerConfigTest::roundTripWorkspaceConfigurations()
     config.runtimeExecutable = QStringLiteral(".venv/bin/python");
     config.arguments = {QStringLiteral("-m"), QStringLiteral("debugpy.adapter")};
     config.workingDirectory = QStringLiteral("src");
+    config.fileExtensions = {QStringLiteral(".cpp"), QStringLiteral(".hpp")};
+    config.launchArgumentsJson = QStringLiteral("{\"program\":\"\u0024{program}\",\"cwd\":\"\u0024{workspace}\"}");
     config.enabled = true;
 
     QVERIFY(DebuggerConfigStore::save(workspace.path(), {config}));
@@ -39,7 +42,35 @@ void DebuggerConfigTest::roundTripWorkspaceConfigurations()
     QCOMPARE(loaded.first().runtimeExecutable, config.runtimeExecutable);
     QCOMPARE(loaded.first().arguments, config.arguments);
     QCOMPARE(loaded.first().workingDirectory, config.workingDirectory);
+    QCOMPARE(loaded.first().fileExtensions, config.fileExtensions);
+    QCOMPARE(loaded.first().launchArgumentsJson, config.launchArgumentsJson);
     QVERIFY(loaded.first().enabled);
+}
+
+void DebuggerConfigTest::legacyPythonConfigurationDefaultsToPyExtension()
+{
+    QTemporaryDir workspace;
+    QVERIFY(workspace.isValid());
+    QDir dir(workspace.path());
+    QVERIFY(dir.mkpath(QStringLiteral(".cinderde")));
+    QFile file(dir.filePath(QStringLiteral(".cinderde/settings.json")));
+    QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+    file.write(QJsonDocument(QJsonObject{
+        {QStringLiteral("debuggers"), QJsonArray{
+            QJsonObject{
+                {QStringLiteral("id"), QStringLiteral("legacy-python")},
+                {QStringLiteral("name"), QStringLiteral("Python debugpy")},
+                {QStringLiteral("languageId"), QStringLiteral("python")},
+                {QStringLiteral("executable"), QStringLiteral("python3")}
+            }
+        }}
+    }).toJson());
+    file.close();
+
+    const auto loaded = DebuggerConfigStore::load(workspace.path());
+    QCOMPARE(loaded.size(), 1);
+    QCOMPARE(loaded.first().fileExtensions, QStringList{QStringLiteral(".py")});
+    QVERIFY(loaded.first().launchArgumentsJson.isEmpty());
 }
 
 void DebuggerConfigTest::preserveExistingWorkspaceSettings()
