@@ -191,6 +191,12 @@ void DebugAdapterClient::parseMessages()
 
 void DebugAdapterClient::handleFinished(int exitCode, QProcess::ExitStatus status)
 {
+    // QProcess may emit finished() while unread bytes remain available. Drain
+    // stdout and parse complete frames before treating the remaining buffer as
+    // a truncated DAP message.
+    m_buffer += m_process->readAllStandardOutput();
+    parseMessages();
+
     if (!m_buffer.isEmpty()) {
         emit protocolError(QStringLiteral("Debug adapter exited with an incomplete DAP message."));
         m_buffer.clear();
