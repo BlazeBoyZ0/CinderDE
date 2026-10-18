@@ -30,7 +30,7 @@ namespace CinderDE {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      m_pythonDebugger(nullptr),
+      m_debuggerController(nullptr),
       m_debuggerDock(nullptr),
       m_debuggerPanel(nullptr),
       m_sessionRestoreAction(nullptr),
@@ -95,7 +95,7 @@ void MainWindow::setupUi() {
     m_debuggerDock->hide();
 
     m_buildRunManager = new BuildRunManager(this);
-    m_pythonDebugger = new PythonDebugger(this);
+    m_debuggerController = new DebuggerController(this);
 
     setupMenus();
     setupToolbar();
@@ -128,25 +128,25 @@ void MainWindow::setupUi() {
 
     connect(m_outputPanel, &OutputPanel::stopRequested, this, &MainWindow::stopProcess);
 
-    connect(m_pythonDebugger, &PythonDebugger::outputReceived, this, [this](const QString &text) {
+    connect(m_debuggerController, &DebuggerController::outputReceived, this, [this](const QString &text) {
         m_outputPanel->appendSystemMessage(text);
         m_outputPanel->setVisible(true);
         if (m_toggleOutputPanelAction)
             m_toggleOutputPanelAction->setChecked(true);
     });
-    connect(m_pythonDebugger, &PythonDebugger::currentLineChanged, this,
+    connect(m_debuggerController, &DebuggerController::currentLineChanged, this,
             [this](const QString &filePath, int line) { navigateToDiagnostic(filePath, line, 1); });
-    connect(m_pythonDebugger, &PythonDebugger::stackFramesReceived,
+    connect(m_debuggerController, &DebuggerController::stackFramesReceived,
             m_debuggerPanel, &DebuggerPanel::setStackFrames);
-    connect(m_pythonDebugger, &PythonDebugger::scopesReceived,
+    connect(m_debuggerController, &DebuggerController::scopesReceived,
             m_debuggerPanel, &DebuggerPanel::setScopes);
-    connect(m_pythonDebugger, &PythonDebugger::variablesReceived,
+    connect(m_debuggerController, &DebuggerController::variablesReceived,
             m_debuggerPanel, &DebuggerPanel::populateVariables);
     connect(m_debuggerPanel, &DebuggerPanel::frameSelected,
-            m_pythonDebugger, &PythonDebugger::selectFrame);
+            m_debuggerController, &DebuggerController::selectFrame);
     connect(m_debuggerPanel, &DebuggerPanel::expandRequested,
-            m_pythonDebugger, &PythonDebugger::expandVariables);
-    connect(m_pythonDebugger, &PythonDebugger::stateChanged, this, [this](bool active, const QString &status) {
+            m_debuggerController, &DebuggerController::expandVariables);
+    connect(m_debuggerController, &DebuggerController::stateChanged, this, [this](bool active, const QString &status) {
         const bool ready = active && status != QStringLiteral("Starting debugger");
         const bool paused = ready && status == QStringLiteral("Paused");
         const bool running = ready && (status == QStringLiteral("Running") || status == QStringLiteral("Debugging"));
@@ -197,10 +197,10 @@ void MainWindow::setupUi() {
     });
 
     connect(m_fileExplorer, &FileExplorer::fileRenamed, this, [this](const QString &oldPath, const QString &newPath) {
-        if (m_pythonDebugger && m_pythonDebugger->isActive()) {
-            const QString target = m_pythonDebugger->programPath();
+        if (m_debuggerController && m_debuggerController->isActive()) {
+            const QString target = m_debuggerController->programPath();
             if (target == oldPath || target.startsWith(oldPath + "/"))
-                m_pythonDebugger->stop();
+                m_debuggerController->stop();
         }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
             EditorTab *tab = tabAt(i);
@@ -222,10 +222,10 @@ void MainWindow::setupUi() {
     });
 
     connect(m_fileExplorer, &FileExplorer::fileDeleted, this, [this](const QString &deletedPath) {
-        if (m_pythonDebugger && m_pythonDebugger->isActive()) {
-            const QString target = m_pythonDebugger->programPath();
+        if (m_debuggerController && m_debuggerController->isActive()) {
+            const QString target = m_debuggerController->programPath();
             if (target == deletedPath || target.startsWith(deletedPath + "/"))
-                m_pythonDebugger->stop();
+                m_debuggerController->stop();
         }
         for (int i = 0; i < m_tabWidget->count(); ++i) {
             EditorTab *tab = tabAt(i);
@@ -862,8 +862,8 @@ void MainWindow::openWorkspaceFolder(const QString &dirPath) {
         return;
     }
 
-    if (m_pythonDebugger && m_pythonDebugger->isActive())
-        m_pythonDebugger->stop();
+    if (m_debuggerController && m_debuggerController->isActive())
+        m_debuggerController->stop();
 
     m_fileExplorer->setWorkspacePath(dirPath);
     QString canonPath = m_fileExplorer->workspacePath();
@@ -957,9 +957,9 @@ void MainWindow::closeTab(int index) {
     if (!tab) return;
 
     if (promptSaveIfModified(tab)) {
-        if (m_pythonDebugger && m_pythonDebugger->isActive() &&
-            QFileInfo(tab->filePath()).absoluteFilePath() == m_pythonDebugger->programPath())
-            m_pythonDebugger->stop();
+        if (m_debuggerController && m_debuggerController->isActive() &&
+            QFileInfo(tab->filePath()).absoluteFilePath() == m_debuggerController->programPath())
+            m_debuggerController->stop();
         m_tabWidget->removeTab(index);
         delete tab;
 
@@ -1048,7 +1048,7 @@ void MainWindow::startDebugging() {
 
     EditorTab *tab = currentTab();
     if (!tab) {
-        QMessageBox::information(this, "No File", "Open a Python file before starting debugging.");
+        QMessageBox::information(this, "No File", "Open a source file before starting debugging.");
         return;
     }
     if (!promptSaveIfModified(tab))
@@ -1057,61 +1057,87 @@ void MainWindow::startDebugging() {
     const QString programPath = QFileInfo(tab->filePath()).absoluteFilePath();
     if (tab->filePath().isEmpty() || !QFileInfo::exists(programPath)) {
         QMessageBox::information(this, "Save File First",
-                                 "Save the Python file to disk before starting debugging.");
-        return;
-    }
-    if (QFileInfo(programPath).suffix().compare("py", Qt::CaseInsensitive) != 0) {
-        QMessageBox::information(this, "Python Debugging",
-                                 "The v0.9 debugger currently launches Python files (.py).");
+                                 "Save the file to disk before starting debugging.");
         return;
     }
 
+    const QString extension = QLatin1Char('.') + QFileInfo(programPath).suffix().toLower();
     QList<DebuggerConfiguration> configs = DebuggerConfigStore::load(workspacePath);
     QList<DebuggerConfiguration> enabledConfigs;
     for (const DebuggerConfiguration &config : configs) {
-        if (config.enabled && config.languageId == QStringLiteral("python"))
+        if (!config.enabled)
+            continue;
+        QStringList extensions = config.fileExtensions;
+        if (extensions.isEmpty() &&
+            config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0)
+            extensions.append(QStringLiteral(".py"));
+        for (QString &item : extensions) {
+            item = item.trimmed().toLower();
+            if (!item.isEmpty() && !item.startsWith(QLatin1Char('.')))
+                item.prepend(QLatin1Char('.'));
+        }
+        if (extensions.contains(extension))
             enabledConfigs.append(config);
     }
+
     if (enabledConfigs.isEmpty()) {
-        QMessageBox::information(this, "No Python Debugger",
-                                 "This workspace has no enabled Python debugger. Add an external adapter in Tools → Debuggers.");
+        QMessageBox::information(
+            this, "No Matching Debugger",
+            QString("No enabled debugger configuration matches '%1'. Configure an adapter and its file extensions in Tools → Debuggers.")
+                .arg(extension.isEmpty() ? QStringLiteral("(no extension)") : extension));
         showDebuggerDialog();
         configs = DebuggerConfigStore::load(workspacePath);
         for (const DebuggerConfiguration &config : configs) {
-            if (config.enabled && config.languageId == QStringLiteral("python"))
+            if (!config.enabled)
+                continue;
+            QStringList extensions = config.fileExtensions;
+            if (extensions.isEmpty() &&
+                config.languageId.compare(QStringLiteral("python"), Qt::CaseInsensitive) == 0)
+                extensions.append(QStringLiteral(".py"));
+            for (QString &item : extensions) {
+                item = item.trimmed().toLower();
+                if (!item.isEmpty() && !item.startsWith(QLatin1Char('.')))
+                    item.prepend(QLatin1Char('.'));
+            }
+            if (extensions.contains(extension))
                 enabledConfigs.append(config);
         }
     }
     if (enabledConfigs.isEmpty())
         return;
 
-    QStringList names;
-    for (const DebuggerConfiguration &config : enabledConfigs)
-        names.append(config.name);
-    bool selected = false;
-    const QString selectedName = QInputDialog::getItem(
-        this, "Select Debugger", "Workspace Python debugger:", names, 0, false, &selected);
-    if (!selected)
-        return;
-
-    const auto it = std::find_if(enabledConfigs.cbegin(), enabledConfigs.cend(),
-                                 [&selectedName](const DebuggerConfiguration &config) {
-        return config.name == selectedName;
-    });
-    if (it == enabledConfigs.cend())
-        return;
-    const DebuggerConfiguration config = *it;
+    DebuggerConfiguration config = enabledConfigs.first();
+    if (enabledConfigs.size() > 1) {
+        QStringList names;
+        for (const DebuggerConfiguration &candidate : enabledConfigs)
+            names.append(candidate.name);
+        bool selected = false;
+        const QString selectedName = QInputDialog::getItem(
+            this, "Select Debugger", "Choose a debugger adapter:", names, 0, false, &selected);
+        if (!selected)
+            return;
+        const auto it = std::find_if(enabledConfigs.cbegin(), enabledConfigs.cend(),
+                                     [&selectedName](const DebuggerConfiguration &candidate) {
+            return candidate.name == selectedName;
+        });
+        if (it == enabledConfigs.cend())
+            return;
+        config = *it;
+    }
 
     const QString commandPreview = config.executable +
         (config.arguments.isEmpty() ? QString() : QStringLiteral(" ") + config.arguments.join(QLatin1Char(' ')));
     const QString runtimeNotice = config.runtimeExecutable.isEmpty()
-        ? QStringLiteral("Python runtime: adapter default")
-        : QStringLiteral("Python runtime: %1").arg(config.runtimeExecutable);
+        ? QStringLiteral("Runtime / interpreter: adapter default")
+        : QStringLiteral("Runtime / interpreter: %1").arg(config.runtimeExecutable);
+    const QString launchNotice = config.launchArgumentsJson.isEmpty()
+        ? QStringLiteral("DAP launch arguments: built-in defaults")
+        : QStringLiteral("DAP launch arguments: custom JSON");
     const auto trust = QMessageBox::warning(
         this, "Run Workspace Debugger?",
-        QString("CinderDE is about to execute this external debugger command:\n\n%1\n%2\n\n"
+        QString("CinderDE is about to execute this external adapter command:\n\n%1\n%2\n%3\n\n"
                 "Workspace configurations can contain untrusted commands. Only continue if you trust this configuration.")
-            .arg(commandPreview, runtimeNotice),
+            .arg(commandPreview, runtimeNotice, launchNotice),
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (trust != QMessageBox::Yes)
         return;
@@ -1121,9 +1147,8 @@ void MainWindow::startDebugging() {
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction)
         m_toggleOutputPanelAction->setChecked(true);
-    m_pythonDebugger->start(config, programPath, workspacePath, tab->editor()->breakpointLines());
+    m_debuggerController->start(config, programPath, workspacePath, tab->editor()->breakpointLines());
 }
-
 void MainWindow::toggleBreakpoint() {
     EditorTab *tab = currentTab();
     if (!tab) {
@@ -1135,34 +1160,34 @@ void MainWindow::toggleBreakpoint() {
     const bool enabled = tab->editor()->breakpointLines().contains(line);
     statusBar()->showMessage(QString("%1 breakpoint at line %2")
                              .arg(enabled ? "Added" : "Removed").arg(line), 2000);
-    if (m_pythonDebugger && m_pythonDebugger->isActive() &&
-        QFileInfo(tab->filePath()).absoluteFilePath() == m_pythonDebugger->programPath()) {
-        m_pythonDebugger->setBreakpoints(tab->editor()->breakpointLines());
+    if (m_debuggerController && m_debuggerController->isActive() &&
+        QFileInfo(tab->filePath()).absoluteFilePath() == m_debuggerController->programPath()) {
+        m_debuggerController->setBreakpoints(tab->editor()->breakpointLines());
     }
 }
 
 void MainWindow::continueDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->continueExecution();
+    if (m_debuggerController) m_debuggerController->continueExecution();
 }
 
 void MainWindow::pauseDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->pauseExecution();
+    if (m_debuggerController) m_debuggerController->pauseExecution();
 }
 
 void MainWindow::stepOverDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->stepOver();
+    if (m_debuggerController) m_debuggerController->stepOver();
 }
 
 void MainWindow::stepIntoDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->stepInto();
+    if (m_debuggerController) m_debuggerController->stepInto();
 }
 
 void MainWindow::stepOutDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->stepOut();
+    if (m_debuggerController) m_debuggerController->stepOut();
 }
 
 void MainWindow::stopDebugging() {
-    if (m_pythonDebugger) m_pythonDebugger->stop();
+    if (m_debuggerController) m_debuggerController->stop();
 }
 
 void MainWindow::showPreferencesDialog() {
@@ -1348,8 +1373,8 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         event->ignore();
         return;
     }
-    if (m_pythonDebugger && m_pythonDebugger->isActive())
-        m_pythonDebugger->stop();
+    if (m_debuggerController && m_debuggerController->isActive())
+        m_debuggerController->stop();
     saveSettings();
     event->accept();
 }
