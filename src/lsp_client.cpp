@@ -262,7 +262,7 @@ void LspClient::processIncomingBuffer() {
         bool hasContentLength = false;
         bool contentLengthValid = false;
 
-        QList<QByteArray> lines = headerData.split('\\n');
+        QList<QByteArray> lines = headerData.split('\n');
         for (const QByteArray &line : lines) {
             QByteArray trimmed = line.trimmed();
             if (trimmed.startsWith("Content-Length:", Qt::CaseInsensitive)) {
