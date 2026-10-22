@@ -259,22 +259,34 @@ void LspClient::processIncomingBuffer() {
 
         QByteArray headerData = m_readBuffer.left(headerEnd);
         int contentLength = -1;
+        bool hasContentLength = false;
+        bool contentLengthValid = false;
 
-        QList<QByteArray> lines = headerData.split('\n');
+        QList<QByteArray> lines = headerData.split('\\n');
         for (const QByteArray &line : lines) {
             QByteArray trimmed = line.trimmed();
-            if (trimmed.startsWith("Content-Length:") || trimmed.startsWith("content-length:")) {
-                int colonIdx = trimmed.indexOf(':');
+            if (trimmed.startsWith("Content-Length:", Qt::CaseInsensitive)) {
+                hasContentLength = true;
+                const int colonIdx = trimmed.indexOf(':');
                 if (colonIdx != -1) {
-                    contentLength = trimmed.mid(colonIdx + 1).trimmed().toInt();
+                    bool ok = false;
+                    const int parsedLength = trimmed.mid(colonIdx + 1).trimmed().toInt(&ok);
+                    if (ok && parsedLength >= 0) {
+                        contentLength = parsedLength;
+                        contentLengthValid = true;
+                    }
                 }
+                break;
             }
         }
 
-        if (contentLength < 0) {
-            // Invalid header framing, drop buffer up to \r\n\r\n
-            m_readBuffer.remove(0, headerEnd + 4);
-            continue;
+        if (!hasContentLength || !contentLengthValid) {
+            // A malformed length gives us no reliable payload boundary. Discard
+            // buffered bytes rather than treating conversion failure as length 0.
+            emit logMessage(QString("[%1] Malformed LSP Content-Length header; discarding buffered data")
+                                .arg(m_config.name));
+            m_readBuffer.clear();
+            break;
         }
 
         int totalMsgLength = headerEnd + 4 + contentLength;
