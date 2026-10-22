@@ -277,6 +277,30 @@ while True:
         CinderDE::Preferences::instance().removeLspServerConfig("mock_python_lsp");
     }
 
+    void testMalformedContentLengthDoesNotPoisonBuffer() {
+        CinderDE::LspServerConfig cfg;
+        cfg.id = "parser_test";
+        cfg.name = "Parser Test";
+        cfg.languageId = "cpp";
+        cfg.executable = "unused";
+        cfg.enabled = true;
+        CinderDE::LspClient client(cfg, "/tmp");
+        QSignalSpy logSpy(&client, &CinderDE::LspClient::logMessage);
+
+        client.m_readBuffer = "Content-Length: abc\\r\\n\\r\\n{\\"jsonrpc\\":\\"2.0\\"}";
+        client.processIncomingBuffer();
+        QVERIFY(client.m_readBuffer.isEmpty());
+        QCOMPARE(logSpy.count(), 1);
+        QVERIFY(logSpy.takeFirst().at(0).toString().contains("Malformed LSP Content-Length"));
+
+        const QByteArray body = R"({"jsonrpc":"2.0","method":"window/logMessage","params":{"message":"recovered"}})";
+        client.m_readBuffer = "Content-Length: " + QByteArray::number(body.size()) + "\\r\\n\\r\\n" + body;
+        client.processIncomingBuffer();
+        QVERIFY(client.m_readBuffer.isEmpty());
+        QCOMPARE(logSpy.count(), 1);
+        QVERIFY(logSpy.takeFirst().at(0).toString().contains("recovered"));
+    }
+
     void testFailedExecutable() {
         CinderDE::LspServerConfig cfg;
         cfg.id = "invalid_executable";
