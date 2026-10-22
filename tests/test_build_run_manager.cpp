@@ -82,10 +82,10 @@ private slots:
         QFile file(QDir(tempDir.path()).filePath("CMakeLists.txt"));
         QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
         file.write(
-            "cmake_minimum_required(VERSION 3.16)\\n"
-            "project(my.tool)\\n"
-            "add_executable(my.tool main.cpp)\\n"
-            "add_executable(other main.cpp)\\n"
+            "cmake_minimum_required(VERSION 3.16)\n"
+            "project(my.tool)\n"
+            "add_executable(my.tool main.cpp)\n"
+            "add_executable(other main.cpp)\n"
         );
         file.close();
         const QString executable =
