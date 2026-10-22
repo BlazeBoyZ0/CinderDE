@@ -265,7 +265,7 @@ void LspClient::processIncomingBuffer() {
         QList<QByteArray> lines = headerData.split('\n');
         for (const QByteArray &line : lines) {
             QByteArray trimmed = line.trimmed();
-            if (trimmed.startsWith("Content-Length:", Qt::CaseInsensitive)) {
+            if (trimmed.toLower().startsWith("content-length:")) {
                 hasContentLength = true;
                 const int colonIdx = trimmed.indexOf(':');
                 if (colonIdx != -1) {
