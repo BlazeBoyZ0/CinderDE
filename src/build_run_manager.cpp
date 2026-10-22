@@ -67,14 +67,14 @@ QString BuildRunManager::findCMakeExecutable(const QString &workspacePath, const
     }
 
     QString projectName;
-    QRegularExpression projRx(R"(project\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression projRx(R"(project\s*\(\s*([A-Za-z0-9_.#+-]+))", QRegularExpression::CaseInsensitiveOption);
     auto projMatch = projRx.match(content);
     if (projMatch.hasMatch()) {
         projectName = projMatch.captured(1);
     }
 
     QStringList targets;
-    QRegularExpression execRx(R"(add_executable\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression execRx(R"(add_executable\s*\(\s*([A-Za-z0-9_.#+-]+))", QRegularExpression::CaseInsensitiveOption);
     auto it = execRx.globalMatch(content);
     while (it.hasNext()) {
         auto match = it.next();
