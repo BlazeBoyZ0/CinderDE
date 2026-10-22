@@ -1,6 +1,8 @@
 #ifndef CINDERDE_LSP_CLIENT_H
 #define CINDERDE_LSP_CLIENT_H
 
+class TestLsp;
+
 #include <QObject>
 #include <QProcess>
 #include <QJsonObject>
@@ -64,6 +66,8 @@ private slots:
     void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
 
 private:
+    friend class ::TestLsp;
+
     LspServerConfig m_config;
     QString m_workspacePath;
     LspServerStatus m_status;
