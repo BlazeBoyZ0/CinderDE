@@ -126,16 +126,20 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
     QString filePath = dir.filePath(".cinderde/settings.json");
     QJsonObject root;
 
-    // Read existing object if present to preserve other keys
+    // Preserve existing settings. Do not overwrite a file we cannot read or
+    // parse: silently replacing malformed JSON would destroy unrelated settings.
     if (QFile::exists(filePath)) {
         QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QJsonDocument existingDoc = QJsonDocument::fromJson(file.readAll());
-            if (existingDoc.isObject()) {
-                root = existingDoc.object();
-            }
-            file.close();
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return false;
         }
+        QJsonParseError parseError;
+        QJsonDocument existingDoc = QJsonDocument::fromJson(file.readAll(), &parseError);
+        file.close();
+        if (parseError.error != QJsonParseError::NoError || !existingDoc.isObject()) {
+            return false;
+        }
+        root = existingDoc.object();
     }
 
     if (config.hasWordWrap) {
@@ -166,10 +170,18 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
     }
 
     QJsonDocument doc(root);
-    file.write(doc.toJson(QJsonDocument::Indented));
+    const QByteArray serialized = doc.toJson(QJsonDocument::Indented);
+    const qint64 bytesWritten = file.write(serialized);
+    if (bytesWritten != serialized.size()) {
+        file.close();
+        return false;
+    }
+    if (!file.flush()) {
+        file.close();
+        return false;
+    }
     file.close();
-
-    return true;
+    return file.error() == QFileDevice::NoError;
 }
 
 } // namespace CinderDE
