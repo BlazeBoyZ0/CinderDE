@@ -161,14 +161,20 @@ QString BuildRunManager::substituteMacros(const QString &cmd, const QString &fil
     }
 
     const QMap<QString, QString> macros = {
-        {"\${file}", filePath},
-        {"\${fileDir}", fileDir},
-        {"\${fileName}", fileName},
-        {"\${fileBase}", fileBase},
-        {"\${fileExt}", fileExt},
-        {"\${workspace}", workspacePath},
-        {"\${workingDir}", resolvedWorkingDir},
-        {"\${execPath}", QDir(fileDir).filePath(fileBase)}
+        {"${file}", filePath},
+        {"${fileDir}", fileDir},
+        {"${fileName}", fileName},
+        {"${fileBase}", fileBase},
+        {"${fileExt}", fileExt},
+        {"${workspace}", workspacePath},
+        {"${workingDir}", resolvedWorkingDir},
+        {"${execPath}", QDir(fileDir).filePath(fileBase)}
+    };
+
+    auto needsShellQuote = [](const QString &val) {
+        if (val.isEmpty()) return false;
+        static const QRegularExpression rx(R"([\s"'\\$&|;<>()`*?~#])");
+        return val.contains(rx);
     };
 
     auto shellQuote = [](const QString &value) {
@@ -191,7 +197,11 @@ QString BuildRunManager::substituteMacros(const QString &cmd, const QString &fil
 
                 QString value = it.value();
                 if (quoteState == QuoteState::Unquoted) {
-                    result += shellQuote(value);
+                    if (needsShellQuote(value)) {
+                        result += shellQuote(value);
+                    } else {
+                        result += value;
+                    }
                 } else if (quoteState == QuoteState::SingleQuoted) {
                     value.replace("'", "'\\''");
                     result += value;
@@ -199,7 +209,7 @@ QString BuildRunManager::substituteMacros(const QString &cmd, const QString &fil
                     value.replace("\\", "\\\\")
                          .replace("\"", "\\\"")
                          .replace("$", "\\$")
-                         .replace("\`", "\\\`");
+                         .replace("`", QStringLiteral("\\`"));
                     result += value;
                 }
 
