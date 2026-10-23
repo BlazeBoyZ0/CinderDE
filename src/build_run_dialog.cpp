@@ -156,32 +156,23 @@ void BuildRunDialog::onAutoDetectTerminal() {
 
 WorkspaceConfig BuildRunDialog::config() const {
     WorkspaceConfig cfg;
-    QString buildStr = m_buildCommandEdit->text().trimmed();
-    if (!buildStr.isEmpty()) {
-        cfg.hasBuildCommand = true;
-        cfg.buildCommand = buildStr;
-    }
 
-    QString runStr = m_runCommandEdit->text().trimmed();
-    if (!runStr.isEmpty()) {
-        cfg.hasRunCommand = true;
-        cfg.runCommand = runStr;
-    }
+    // Mark dialog-owned fields as present even when blank. Saving a blank field
+    // must clear a previously stored override instead of silently retaining it.
+    cfg.hasBuildCommand = true;
+    cfg.buildCommand = m_buildCommandEdit->text().trimmed();
 
-    QString workStr = m_workingDirEdit->text().trimmed();
-    if (!workStr.isEmpty()) {
-        cfg.hasWorkingDirectory = true;
-        cfg.workingDirectory = workStr;
-    }
+    cfg.hasRunCommand = true;
+    cfg.runCommand = m_runCommandEdit->text().trimmed();
+
+    cfg.hasWorkingDirectory = true;
+    cfg.workingDirectory = m_workingDirEdit->text().trimmed();
 
     cfg.hasExecutionMode = true;
     cfg.executionMode = executionMode();
 
-    QString termStr = m_terminalCommandEdit->text().trimmed();
-    if (!termStr.isEmpty()) {
-        cfg.hasTerminalCommand = true;
-        cfg.terminalCommand = termStr;
-    }
+    cfg.hasTerminalCommand = true;
+    cfg.terminalCommand = m_terminalCommandEdit->text().trimmed();
 
     return cfg;
 }
