@@ -1,6 +1,7 @@
 #include "cinderde/workspace_config.h"
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -164,7 +165,9 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
         root["terminalCommand"] = config.terminalCommand;
     }
 
-    QFile file(filePath);
+    // Write through a temporary file and atomically replace the settings file
+    // only after the complete JSON payload has been written successfully.
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         return false;
     }
@@ -172,16 +175,12 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
     QJsonDocument doc(root);
     const QByteArray serialized = doc.toJson(QJsonDocument::Indented);
     const qint64 bytesWritten = file.write(serialized);
-    if (bytesWritten != serialized.size()) {
-        file.close();
+    if (bytesWritten != serialized.size() || file.error() != QFileDevice::NoError) {
+        file.cancelWriting();
         return false;
     }
-    if (!file.flush()) {
-        file.close();
-        return false;
-    }
-    file.close();
-    return file.error() == QFileDevice::NoError;
+
+    return file.commit();
 }
 
 } // namespace CinderDE
