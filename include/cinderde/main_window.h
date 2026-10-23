@@ -60,6 +60,9 @@ private slots:
     void resetFontSize();
 
     // Help actions
+    void openGuide();
+    void showKeyboardShortcuts();
+    void reportBug();
     void about();
 
     // Build and Run actions
