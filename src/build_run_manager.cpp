@@ -287,19 +287,24 @@ void BuildRunManager::run(const QString &filePath, const QString &workspacePath,
         return;
     }
 
-    // Check executable binary existence for relative/absolute binary paths
+    // Resolve path-like executables against the process working directory,
+    // not CDE's own current directory.
     QString exeBin = QProcess::splitCommand(runCmd).value(0);
-    if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\')) && !QFile::exists(exeBin)) {
-        QString reFound = findCMakeExecutable(workspacePath, workingDir);
-        if (!reFound.isEmpty() && QFile::exists(reFound)) {
-            runCmd = reFound;
-        } else {
-            emit outputReceived(QString("=== ERROR: Executable '%1' not found ===\n").arg(exeBin), false);
-            emit processError(QString("Executable '%1' was not found.").arg(exeBin), false);
-            return;
+    if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\'))) {
+        QString resolvedExe = QFileInfo(exeBin).isAbsolute()
+                                  ? exeBin
+                                  : QDir(workingDir).filePath(exeBin);
+        if (!QFileInfo::exists(resolvedExe)) {
+            QString reFound = findCMakeExecutable(workspacePath, workingDir);
+            if (!reFound.isEmpty() && QFile::exists(reFound)) {
+                runCmd = reFound;
+            } else {
+                emit outputReceived(QString("=== ERROR: Executable '%1' not found ===\n").arg(exeBin), false);
+                emit processError(QString("Executable '%1' was not found.").arg(exeBin), false);
+                return;
+            }
         }
     }
-
     QString mode = config.hasExecutionMode ? config.executionMode : Preferences::instance().executionMode();
     bool externalTerm = (mode == "external_terminal");
     QString termCmd = config.hasTerminalCommand ? config.terminalCommand : Preferences::instance().terminalCommand();
