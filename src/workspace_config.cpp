@@ -1,6 +1,7 @@
 #include "cinderde/workspace_config.h"
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
@@ -126,16 +127,20 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
     QString filePath = dir.filePath(".cinderde/settings.json");
     QJsonObject root;
 
-    // Read existing object if present to preserve other keys
+    // Preserve existing settings. Do not overwrite a file we cannot read or
+    // parse: silently replacing malformed JSON would destroy unrelated settings.
     if (QFile::exists(filePath)) {
         QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QJsonDocument existingDoc = QJsonDocument::fromJson(file.readAll());
-            if (existingDoc.isObject()) {
-                root = existingDoc.object();
-            }
-            file.close();
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            return false;
         }
+        QJsonParseError parseError;
+        QJsonDocument existingDoc = QJsonDocument::fromJson(file.readAll(), &parseError);
+        file.close();
+        if (parseError.error != QJsonParseError::NoError || !existingDoc.isObject()) {
+            return false;
+        }
+        root = existingDoc.object();
     }
 
     if (config.hasWordWrap) {
@@ -160,16 +165,22 @@ bool WorkspaceConfig::saveToWorkspace(const QString &workspacePath, const Worksp
         root["terminalCommand"] = config.terminalCommand;
     }
 
-    QFile file(filePath);
+    // Write through a temporary file and atomically replace the settings file
+    // only after the complete JSON payload has been written successfully.
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         return false;
     }
 
     QJsonDocument doc(root);
-    file.write(doc.toJson(QJsonDocument::Indented));
-    file.close();
+    const QByteArray serialized = doc.toJson(QJsonDocument::Indented);
+    const qint64 bytesWritten = file.write(serialized);
+    if (bytesWritten != serialized.size() || file.error() != QFileDevice::NoError) {
+        file.cancelWriting();
+        return false;
+    }
 
-    return true;
+    return file.commit();
 }
 
 } // namespace CinderDE

@@ -614,9 +614,20 @@ EditorTab* MainWindow::tabAt(int index) const {
 
 EditorTab* MainWindow::findTabByPath(const QString &filePath) const {
     if (filePath.isEmpty()) return nullptr;
+
+    auto normalizedPath = [](const QString &path) {
+        QFileInfo info(path);
+        const QString canonical = info.canonicalFilePath();
+        // Canonical paths resolve relative/absolute aliases and symbolic links
+        // for existing files. Fall back to an absolute path when resolution
+        // is unavailable, while still normalizing relative path spellings.
+        return canonical.isEmpty() ? QDir::cleanPath(info.absoluteFilePath()) : canonical;
+    };
+
+    const QString targetPath = normalizedPath(filePath);
     for (int i = 0; i < m_tabWidget->count(); ++i) {
         EditorTab *tab = tabAt(i);
-        if (tab && tab->filePath() == filePath) {
+        if (tab && !tab->filePath().isEmpty() && normalizedPath(tab->filePath()) == targetPath) {
             return tab;
         }
     }
@@ -774,34 +785,46 @@ void MainWindow::openFolder() {
     }
 }
 
-void MainWindow::saveFile() {
+bool MainWindow::saveFile() {
     EditorTab *tab = currentTab();
-    if (!tab) return;
+    // A workspace build/run can be valid even when no editor tab is open.
+    // No active document means there is nothing to save, not a save failure.
+    if (!tab) return true;
 
     if (tab->isUntitled()) {
-        saveFileAs();
-    } else {
-        if (tab->save()) {
-            updateTabTitle(tab);
-            statusBar()->showMessage("File saved", 2000);
-            saveSessionState();
-        }
+        return saveFileAs();
     }
+
+    if (!tab->save()) return false;
+
+    updateTabTitle(tab);
+    statusBar()->showMessage("File saved", 2000);
+    saveSessionState();
+    return true;
 }
 
-void MainWindow::saveFileAs() {
+bool MainWindow::saveFileAs() {
     EditorTab *tab = currentTab();
-    if (!tab) return;
+    if (!tab) return false;
 
     QString defaultName = tab->filePath().isEmpty() ? tab->fileName() : tab->filePath();
     QString filePath = QFileDialog::getSaveFileName(this, "Save File As", defaultName, "All Files (*)");
-    if (!filePath.isEmpty()) {
-        if (tab->saveAs(filePath)) {
-            updateTabTitle(tab);
-            statusBar()->showMessage("File saved", 2000);
-            saveSessionState();
-        }
+    if (filePath.isEmpty()) return false;
+
+    EditorTab *existing = findTabByPath(filePath);
+    if (existing && existing != tab) {
+        QMessageBox::warning(
+            this, "File Already Open",
+            QString("The file is already open in another tab:\n%1").arg(filePath));
+        return false;
     }
+
+    if (!tab->saveAs(filePath)) return false;
+
+    updateTabTitle(tab);
+    statusBar()->showMessage("File saved", 2000);
+    saveSessionState();
+    return true;
 }
 
 bool MainWindow::promptSaveIfModified(EditorTab *tab) {
@@ -817,6 +840,15 @@ bool MainWindow::promptSaveIfModified(EditorTab *tab) {
         if (tab->isUntitled()) {
             QString filePath = QFileDialog::getSaveFileName(this, "Save File As", tab->fileName(), "All Files (*)");
             if (filePath.isEmpty()) return false; // Canceled save as
+
+            EditorTab *existing = findTabByPath(filePath);
+            if (existing && existing != tab) {
+                QMessageBox::warning(
+                    this, "File Already Open",
+                    QString("The file is already open in another tab:\n%1").arg(filePath));
+                return false;
+            }
+
             return tab->saveAs(filePath);
         } else {
             return tab->save();
@@ -928,7 +960,7 @@ void MainWindow::showPreferencesDialog() {
 }
 
 void MainWindow::buildAndRun() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 
@@ -938,7 +970,7 @@ void MainWindow::buildAndRun() {
 }
 
 void MainWindow::buildOnly() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 
@@ -948,7 +980,7 @@ void MainWindow::buildOnly() {
 }
 
 void MainWindow::runOnly() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 

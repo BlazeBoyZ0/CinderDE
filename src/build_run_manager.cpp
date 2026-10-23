@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QTimer>
 #include <QDebug>
+#include <QMap>
 
 namespace CinderDE {
 
@@ -67,14 +68,14 @@ QString BuildRunManager::findCMakeExecutable(const QString &workspacePath, const
     }
 
     QString projectName;
-    QRegularExpression projRx(R"(project\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression projRx(R"(project\s*\(\s*([A-Za-z0-9_.#+-]+))", QRegularExpression::CaseInsensitiveOption);
     auto projMatch = projRx.match(content);
     if (projMatch.hasMatch()) {
         projectName = projMatch.captured(1);
     }
 
     QStringList targets;
-    QRegularExpression execRx(R"(add_executable\s*\(\s*([A-Za-z0-9_#-]+))", QRegularExpression::CaseInsensitiveOption);
+    QRegularExpression execRx(R"(add_executable\s*\(\s*([A-Za-z0-9_.#+-]+))", QRegularExpression::CaseInsensitiveOption);
     auto it = execRx.globalMatch(content);
     while (it.hasNext()) {
         auto match = it.next();
@@ -149,31 +150,92 @@ QString BuildRunManager::substituteMacros(const QString &cmd, const QString &fil
     if (cmd.isEmpty()) return QString();
 
     QFileInfo fileInfo(filePath);
-    QString fileDir = fileInfo.absolutePath();
-    QString fileName = fileInfo.fileName();
-    QString fileBase = fileInfo.completeBaseName();
-    QString fileExt = fileInfo.suffix();
+    const QString fileDir = fileInfo.absolutePath();
+    const QString fileName = fileInfo.fileName();
+    const QString fileBase = fileInfo.completeBaseName();
+    const QString fileExt = fileInfo.suffix();
 
     QString resolvedWorkingDir = workingDir;
     if (resolvedWorkingDir.isEmpty()) {
         resolvedWorkingDir = !workspacePath.isEmpty() ? workspacePath : fileDir;
     }
 
-    QString execPath = QDir(fileDir).filePath(fileBase);
+    const QMap<QString, QString> macros = {
+        {"\${file}", filePath},
+        {"\${fileDir}", fileDir},
+        {"\${fileName}", fileName},
+        {"\${fileBase}", fileBase},
+        {"\${fileExt}", fileExt},
+        {"\${workspace}", workspacePath},
+        {"\${workingDir}", resolvedWorkingDir},
+        {"\${execPath}", QDir(fileDir).filePath(fileBase)}
+    };
 
-    QString result = cmd;
-    result.replace("${file}", filePath);
-    result.replace("${fileDir}", fileDir);
-    result.replace("${fileName}", fileName);
-    result.replace("${fileBase}", fileBase);
-    result.replace("${fileExt}", fileExt);
-    result.replace("${workspace}", workspacePath);
-    result.replace("${workingDir}", resolvedWorkingDir);
-    result.replace("${execPath}", execPath);
+    auto shellQuote = [](const QString &value) {
+        QString escaped = value;
+        escaped.replace("'", "'\\''");
+        return QString("'") + escaped + "'";
+    };
+
+    QString result;
+    result.reserve(cmd.size() + 64);
+    enum class QuoteState { Unquoted, SingleQuoted, DoubleQuoted };
+    QuoteState quoteState = QuoteState::Unquoted;
+    bool escaped = false;
+
+    for (qsizetype i = 0; i < cmd.size();) {
+        if (!escaped) {
+            bool replaced = false;
+            for (auto it = macros.cbegin(); it != macros.cend(); ++it) {
+                if (cmd.mid(i, it.key().size()) != it.key()) continue;
+
+                QString value = it.value();
+                if (quoteState == QuoteState::Unquoted) {
+                    result += shellQuote(value);
+                } else if (quoteState == QuoteState::SingleQuoted) {
+                    value.replace("'", "'\\''");
+                    result += value;
+                } else {
+                    value.replace("\\", "\\\\")
+                         .replace("\"", "\\\"")
+                         .replace("$", "\\$")
+                         .replace("\`", "\\\`");
+                    result += value;
+                }
+
+                i += it.key().size();
+                replaced = true;
+                break;
+            }
+            if (replaced) continue;
+        }
+
+        const QChar ch = cmd.at(i++);
+        result += ch;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (quoteState == QuoteState::SingleQuoted) {
+            if (ch == '\'') quoteState = QuoteState::Unquoted;
+            continue;
+        }
+
+        if (ch == '\\') {
+            escaped = true;
+        } else if (quoteState == QuoteState::DoubleQuoted) {
+            if (ch == '"') quoteState = QuoteState::Unquoted;
+        } else if (ch == '\'') {
+            quoteState = QuoteState::SingleQuoted;
+        } else if (ch == '"') {
+            quoteState = QuoteState::DoubleQuoted;
+        }
+    }
 
     return result;
 }
-
 QString BuildRunManager::resolveWorkingDirectory(const QString &filePath, const QString &workspacePath, const WorkspaceConfig &config) {
     if (config.hasWorkingDirectory && !config.workingDirectory.trimmed().isEmpty()) {
         return substituteMacros(config.workingDirectory.trimmed(), filePath, workspacePath, "");
@@ -204,7 +266,15 @@ std::pair<QString, QString> BuildRunManager::resolveCommands(const QString &file
 
     // Check if CMake workspace
     if (!workspacePath.isEmpty() && QFile::exists(QDir(workspacePath).filePath("CMakeLists.txt"))) {
-        buildCmd = "cmake -B build -S . && cmake --build build";
+        QString absoluteWorkspace = QDir::cleanPath(QFileInfo(workspacePath).absoluteFilePath());
+        auto shellQuote = [](QString path) {
+            path.replace("'", "'\\''");
+            return QString("'") + path + "'";
+        };
+        QString quotedWorkspace = shellQuote(absoluteWorkspace);
+        QString quotedBuildDir = shellQuote(QDir(absoluteWorkspace).filePath("build"));
+        buildCmd = QString("cmake -B %1 -S %2 && cmake --build %1")
+                       .arg(quotedBuildDir, quotedWorkspace);
         if (config.hasRunCommand && !config.runCommand.trimmed().isEmpty()) {
             runCmd = config.runCommand;
         } else {
@@ -287,19 +357,22 @@ void BuildRunManager::run(const QString &filePath, const QString &workspacePath,
         return;
     }
 
-    // Check executable binary existence for relative/absolute binary paths
+    // Resolve path-like executables against the process working directory,
+    // not CDE's own current directory. Never substitute a different executable
+    // when an explicitly configured path is missing: that can run the wrong program.
     QString exeBin = QProcess::splitCommand(runCmd).value(0);
-    if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\')) && !QFile::exists(exeBin)) {
-        QString reFound = findCMakeExecutable(workspacePath, workingDir);
-        if (!reFound.isEmpty() && QFile::exists(reFound)) {
-            runCmd = reFound;
-        } else {
-            emit outputReceived(QString("=== ERROR: Executable '%1' not found ===\n").arg(exeBin), false);
-            emit processError(QString("Executable '%1' was not found.").arg(exeBin), false);
+    if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\'))) {
+        QString resolvedExe = QFileInfo(exeBin).isAbsolute()
+                                  ? exeBin
+                                  : QDir(workingDir).filePath(exeBin);
+        if (!QFileInfo::exists(resolvedExe)) {
+            emit outputReceived(QString("=== ERROR: Executable '%1' not found (checked relative to '%2') ===\n")
+                                    .arg(exeBin, workingDir), false);
+            emit processError(QString("Executable '%1' was not found relative to '%2'.")
+                                  .arg(exeBin, workingDir), false);
             return;
         }
     }
-
     QString mode = config.hasExecutionMode ? config.executionMode : Preferences::instance().executionMode();
     bool externalTerm = (mode == "external_terminal");
     QString termCmd = config.hasTerminalCommand ? config.terminalCommand : Preferences::instance().terminalCommand();
