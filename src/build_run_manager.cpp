@@ -205,8 +205,12 @@ std::pair<QString, QString> BuildRunManager::resolveCommands(const QString &file
     // Check if CMake workspace
     if (!workspacePath.isEmpty() && QFile::exists(QDir(workspacePath).filePath("CMakeLists.txt"))) {
         QString absoluteWorkspace = QDir::cleanPath(QFileInfo(workspacePath).absoluteFilePath());
-        QString quotedWorkspace = QString("\"%1\"").arg(absoluteWorkspace);
-        QString quotedBuildDir = QString("\"%1\"").arg(QDir(absoluteWorkspace).filePath("build"));
+        auto shellQuote = [](QString path) {
+            path.replace("'", "'\\''");
+            return QString("'") + path + "'";
+        };
+        QString quotedWorkspace = shellQuote(absoluteWorkspace);
+        QString quotedBuildDir = shellQuote(QDir(absoluteWorkspace).filePath("build"));
         buildCmd = QString("cmake -B %1 -S %2 && cmake --build %1")
                        .arg(quotedBuildDir, quotedWorkspace);
         if (config.hasRunCommand && !config.runCommand.trimmed().isEmpty()) {
