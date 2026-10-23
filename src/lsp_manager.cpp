@@ -177,7 +177,19 @@ QList<LspClient*> LspManager::activeClients() const {
 void LspManager::notifyDocumentOpened(const QString &filePath, const QString &text) {
     if (filePath.isEmpty()) return;
 
-    QString langId = languageIdForFile(filePath);
+    const QString langId = languageIdForFile(filePath);
+    if (m_openDocs.contains(filePath)) {
+        OpenDocumentInfo &existing = m_openDocs[filePath];
+        existing.isOpen = true;
+        existing.languageId = langId;
+        if (existing.pendingText != text) {
+            existing.pendingText = text;
+            if (existing.didOpenSent) {
+                notifyDocumentChanged(filePath, text);
+            }
+        }
+        return;
+    }
     OpenDocumentInfo info;
     info.filePath = filePath;
     info.languageId = langId;
@@ -270,6 +282,12 @@ void LspManager::notifyDocumentClosed(const QString &filePath) {
 void LspManager::stopServer(const QString &configId) {
     if (!m_clients.contains(configId)) {
         return;
+    }
+
+    for (auto it = m_openDocs.begin(); it != m_openDocs.end(); ++it) {
+        if (findConfigForFile(it.value().filePath).id == configId) {
+            it.value().didOpenSent = false;
+        }
     }
 
     LspClient *client = m_clients.take(configId);
