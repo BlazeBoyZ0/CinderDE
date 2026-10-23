@@ -10,7 +10,16 @@ Place user language-pack JSON files in:
 ~/.config/cinderde/languages/
 ```
 
-CinderDE does not load embedded language-pack resources or ship example packs.
+CinderDE does not automatically load the repository's example packs. The repository includes ready-to-copy starter packs in [`language-packs/`](../language-packs/) for C, C++, Python, Java, Kotlin, Go, Rust, JavaScript, TypeScript, C#, and Swift. These files remain separate examples; they are not bundled into the application.
+
+## Installing a repository pack
+
+1. Open the repository's [`language-packs/`](../language-packs/) folder.
+2. Choose the JSON file for your language.
+3. Copy that file into `~/.config/cinderde/languages/`.
+4. Restart CinderDE so it discovers the pack.
+
+The folder is a collection of starter configurations, not a compiler/runtime bundle. Review the build/run commands for your own toolchain and project layout; some languages require a project file or separately installed compiler. You can edit any pack or create your own JSON file.
 
 ## JSON format
 
@@ -75,6 +84,7 @@ Quote paths appropriately when writing shell commands, especially if paths may c
 
 ## Notes
 
-- Language IDs and names are user-defined; they do not populate a predefined language dropdown.
+- Language IDs and names are defined by each JSON pack; they do not populate a predefined language dropdown.
+- The repository's `language-packs/` folder is not auto-loaded. Copy only the packs you want into the user languages directory.
 - A language pack provides editor metadata, not a compiler, interpreter, debugger, or language server.
 - Install external language servers separately and configure them in the [LSP panel](lsp.md).
