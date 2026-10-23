@@ -8,6 +8,7 @@
 #include <QTextDocument>
 #include <QTextCursor>
 #include <QFile>
+#include <QSaveFile>
 #include <QTextStream>
 #include <QFileInfo>
 #include <QMessageBox>
@@ -1188,9 +1189,7 @@ bool EditorTab::openFile(const QString &filePath, bool showDialog) {
                 this, "Binary File Warning",
                 QString("The file '%1' appears to be a binary file. Opening binary files may display invalid text.\n\nDo you still want to open it?").arg(QFileInfo(filePath).fileName()),
                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-            if (res != QMessageBox::Yes) {
-                return false;
-            }
+            if (res != QMessageBox::Yes) return false;
         } else {
             return false;
         }
@@ -1205,9 +1204,21 @@ bool EditorTab::openFile(const QString &filePath, bool showDialog) {
     }
 
     QTextStream in(&file);
-    m_editor->setPlainText(in.readAll());
+    const QString loadedText = in.readAll();
+    const bool readFailed = in.status() != QTextStream::Ok ||
+                            file.error() != QFileDevice::NoError;
+    const QString readError = file.errorString();
     file.close();
 
+    if (readFailed) {
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Opening File",
+                QString("Failed to read file:\n%1\nError: %2").arg(filePath, readError));
+        }
+        return false;
+    }
+
+    m_editor->setPlainText(loadedText);
     m_filePath = filePath;
     m_editor->setFilePath(filePath);
     m_editor->document()->setModified(false);
@@ -1243,7 +1254,7 @@ bool EditorTab::save(bool showDialog) {
         return false; // Requires saveAs
     }
 
-    QFile file(m_filePath);
+    QSaveFile file(m_filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (showDialog) {
             QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
@@ -1255,15 +1266,21 @@ bool EditorTab::save(bool showDialog) {
     out << m_editor->toPlainText();
     out.flush();
 
-    if (file.error() != QFileDevice::NoError) {
+    if (out.status() != QTextStream::Ok || file.error() != QFileDevice::NoError) {
+        const QString error = file.errorString();
+        file.cancelWriting();
         if (showDialog) {
-            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(m_filePath, error));
         }
-        file.close();
         return false;
     }
 
-    file.close();
+    if (!file.commit()) {
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to commit file:\n%1\nError: %2").arg(m_filePath, file.errorString()));
+        }
+        return false;
+    }
 
     m_editor->document()->setModified(false);
     LspManager::instance().notifyDocumentSaved(m_filePath, m_editor->toPlainText());
@@ -1275,7 +1292,7 @@ bool EditorTab::save(bool showDialog) {
 bool EditorTab::saveAs(const QString &filePath, bool showDialog) {
     if (filePath.isEmpty()) return false;
 
-    QFile file(filePath);
+    QSaveFile file(filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (showDialog) {
             QMessageBox::critical(this, "Error Saving File", QString("Failed to save file:\n%1\nError: %2").arg(filePath, file.errorString()));
@@ -1287,15 +1304,21 @@ bool EditorTab::saveAs(const QString &filePath, bool showDialog) {
     out << m_editor->toPlainText();
     out.flush();
 
-    if (file.error() != QFileDevice::NoError) {
+    if (out.status() != QTextStream::Ok || file.error() != QFileDevice::NoError) {
+        const QString error = file.errorString();
+        file.cancelWriting();
         if (showDialog) {
-            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(filePath, file.errorString()));
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to write to file:\n%1\nError: %2").arg(filePath, error));
         }
-        file.close();
         return false;
     }
 
-    file.close();
+    if (!file.commit()) {
+        if (showDialog) {
+            QMessageBox::critical(this, "Error Saving File", QString("Failed to commit file:\n%1\nError: %2").arg(filePath, file.errorString()));
+        }
+        return false;
+    }
 
     m_filePath = filePath;
     m_editor->setFilePath(filePath);
