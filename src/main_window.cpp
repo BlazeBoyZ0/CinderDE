@@ -776,7 +776,9 @@ void MainWindow::openFolder() {
 
 bool MainWindow::saveFile() {
     EditorTab *tab = currentTab();
-    if (!tab) return false;
+    // A workspace build/run can be valid even when no editor tab is open.
+    // No active document means there is nothing to save, not a save failure.
+    if (!tab) return true;
 
     if (tab->isUntitled()) {
         return saveFileAs();
