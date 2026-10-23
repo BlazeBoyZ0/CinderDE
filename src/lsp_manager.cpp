@@ -141,6 +141,21 @@ LspClient* LspManager::createAndStartClient(const LspServerConfig &config) {
     connect(client, &LspClient::statusChanged, this, [this, config, client](const LspServerStatus &status) {
         emit serverStatusChanged(config.id, status);
 
+        // A server can crash after documents were opened. Clear the per-server
+        // sent flags only if this is still the manager's current client; an old
+        // client's delayed shutdown must not invalidate documents already sent
+        // to a replacement client.
+        if ((status.state == LspServerState::Failed ||
+             status.state == LspServerState::Stopped) &&
+            m_clients.value(config.id, nullptr) == client) {
+            for (auto it = m_openDocs.begin(); it != m_openDocs.end(); ++it) {
+                OpenDocumentInfo &info = it.value();
+                if (info.isOpen && findConfigForFile(info.filePath).id == config.id) {
+                    info.didOpenSent = false;
+                }
+            }
+        }
+
         // Documents may be opened before initialize completes. Flush their latest
         // contents once the server is ready, and never send didOpen twice.
         if (status.state == LspServerState::Running) {
