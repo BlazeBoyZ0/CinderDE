@@ -149,31 +149,92 @@ QString BuildRunManager::substituteMacros(const QString &cmd, const QString &fil
     if (cmd.isEmpty()) return QString();
 
     QFileInfo fileInfo(filePath);
-    QString fileDir = fileInfo.absolutePath();
-    QString fileName = fileInfo.fileName();
-    QString fileBase = fileInfo.completeBaseName();
-    QString fileExt = fileInfo.suffix();
+    const QString fileDir = fileInfo.absolutePath();
+    const QString fileName = fileInfo.fileName();
+    const QString fileBase = fileInfo.completeBaseName();
+    const QString fileExt = fileInfo.suffix();
 
     QString resolvedWorkingDir = workingDir;
     if (resolvedWorkingDir.isEmpty()) {
         resolvedWorkingDir = !workspacePath.isEmpty() ? workspacePath : fileDir;
     }
 
-    QString execPath = QDir(fileDir).filePath(fileBase);
+    const QMap<QString, QString> macros = {
+        {"\${file}", filePath},
+        {"\${fileDir}", fileDir},
+        {"\${fileName}", fileName},
+        {"\${fileBase}", fileBase},
+        {"\${fileExt}", fileExt},
+        {"\${workspace}", workspacePath},
+        {"\${workingDir}", resolvedWorkingDir},
+        {"\${execPath}", QDir(fileDir).filePath(fileBase)}
+    };
 
-    QString result = cmd;
-    result.replace("${file}", filePath);
-    result.replace("${fileDir}", fileDir);
-    result.replace("${fileName}", fileName);
-    result.replace("${fileBase}", fileBase);
-    result.replace("${fileExt}", fileExt);
-    result.replace("${workspace}", workspacePath);
-    result.replace("${workingDir}", resolvedWorkingDir);
-    result.replace("${execPath}", execPath);
+    auto shellQuote = [](const QString &value) {
+        QString escaped = value;
+        escaped.replace("'", "'\\''");
+        return QString("'") + escaped + "'";
+    };
+
+    QString result;
+    result.reserve(cmd.size() + 64);
+    enum class QuoteState { Unquoted, SingleQuoted, DoubleQuoted };
+    QuoteState quoteState = QuoteState::Unquoted;
+    bool escaped = false;
+
+    for (qsizetype i = 0; i < cmd.size();) {
+        if (!escaped) {
+            bool replaced = false;
+            for (auto it = macros.cbegin(); it != macros.cend(); ++it) {
+                if (cmd.mid(i, it.key().size()) != it.key()) continue;
+
+                QString value = it.value();
+                if (quoteState == QuoteState::Unquoted) {
+                    result += shellQuote(value);
+                } else if (quoteState == QuoteState::SingleQuoted) {
+                    value.replace("'", "'\\''");
+                    result += value;
+                } else {
+                    value.replace("\\", "\\\\")
+                         .replace("\"", "\\\"")
+                         .replace("$", "\\$")
+                         .replace("\`", "\\\`");
+                    result += value;
+                }
+
+                i += it.key().size();
+                replaced = true;
+                break;
+            }
+            if (replaced) continue;
+        }
+
+        const QChar ch = cmd.at(i++);
+        result += ch;
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (quoteState == QuoteState::SingleQuoted) {
+            if (ch == '\'') quoteState = QuoteState::Unquoted;
+            continue;
+        }
+
+        if (ch == '\\') {
+            escaped = true;
+        } else if (quoteState == QuoteState::DoubleQuoted) {
+            if (ch == '"') quoteState = QuoteState::Unquoted;
+        } else if (ch == '\'') {
+            quoteState = QuoteState::SingleQuoted;
+        } else if (ch == '"') {
+            quoteState = QuoteState::DoubleQuoted;
+        }
+    }
 
     return result;
 }
-
 QString BuildRunManager::resolveWorkingDirectory(const QString &filePath, const QString &workspacePath, const WorkspaceConfig &config) {
     if (config.hasWorkingDirectory && !config.workingDirectory.trimmed().isEmpty()) {
         return substituteMacros(config.workingDirectory.trimmed(), filePath, workspacePath, "");
