@@ -9,6 +9,7 @@
 #include <QCoreApplication>
 #include <QTimer>
 #include <QDebug>
+#include <QMap>
 
 namespace CinderDE {
 
