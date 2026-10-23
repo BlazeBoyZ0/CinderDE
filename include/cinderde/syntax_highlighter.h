@@ -36,6 +36,7 @@ public:
 
     static Language languageFromExtension(const QString &extension);
     static LanguageDefinition definitionFromExtension(const QString &extension);
+    static LanguageDefinition fallbackDefinitionForLanguage(Language lang);
 
 protected:
     void highlightBlock(const QString &text) override;

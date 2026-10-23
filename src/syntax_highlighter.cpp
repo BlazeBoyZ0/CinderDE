@@ -36,16 +36,96 @@ LanguageDefinition SyntaxHighlighter::definitionFromExtension(const QString &ext
     return LanguageRegistry::instance().definitionForExtension(extension);
 }
 
+LanguageDefinition SyntaxHighlighter::fallbackDefinitionForLanguage(Language lang) {
+    LanguageDefinition def;
+    if (lang == Language::C) {
+        def.id = "c";
+        def.name = "C";
+        def.extensions = QStringList() << "c" << "h";
+        def.keywords = QStringList() << "auto" << "break" << "case" << "const" << "continue"
+                                     << "default" << "do" << "else" << "enum" << "extern"
+                                     << "for" << "goto" << "if" << "inline" << "register"
+                                     << "restrict" << "return" << "sizeof" << "static" << "struct"
+                                     << "switch" << "typedef" << "union" << "volatile" << "while";
+        def.types = QStringList() << "char" << "double" << "float" << "int" << "long"
+                                  << "short" << "signed" << "unsigned" << "void" << "bool"
+                                  << "int8_t" << "int16_t" << "int32_t" << "int64_t"
+                                  << "uint8_t" << "uint16_t" << "uint32_t" << "uint64_t"
+                                  << "size_t" << "ptrdiff_t" << "intptr_t" << "uintptr_t";
+        def.comments.linePrefix = "//";
+        def.comments.blockStart = "/*";
+        def.comments.blockEnd = "*/";
+    } else if (lang == Language::Cpp) {
+        def.id = "cpp";
+        def.name = "C++";
+        def.extensions = QStringList() << "cpp" << "cc" << "cxx" << "hpp" << "hxx" << "h";
+        def.keywords = QStringList() << "alignas" << "alignof" << "and" << "and_eq" << "asm"
+                                     << "auto" << "bitand" << "bitor" << "break" << "case"
+                                     << "catch" << "class" << "compl" << "concept" << "const"
+                                     << "consteval" << "constexpr" << "constinit" << "const_cast" << "continue"
+                                     << "co_await" << "co_return" << "co_yield" << "decltype" << "default"
+                                     << "delete" << "do" << "dynamic_cast" << "else" << "enum"
+                                     << "explicit" << "export" << "extern" << "false" << "for"
+                                     << "friend" << "goto" << "if" << "inline" << "mutable"
+                                     << "namespace" << "new" << "noexcept" << "not" << "not_eq"
+                                     << "nullptr" << "operator" << "or" << "or_eq" << "private"
+                                     << "protected" << "public" << "reinterpret_cast" << "requires" << "return"
+                                     << "sizeof" << "static" << "static_assert" << "static_cast" << "struct"
+                                     << "switch" << "template" << "this" << "thread_local" << "throw"
+                                     << "true" << "try" << "typedef" << "typeid" << "typename"
+                                     << "union" << "using" << "virtual" << "volatile" << "while"
+                                     << "xor" << "xor_eq";
+        def.types = QStringList() << "bool" << "char" << "char8_t" << "char16_t" << "char32_t"
+                                  << "double" << "float" << "int" << "long" << "short"
+                                  << "signed" << "unsigned" << "void" << "wchar_t"
+                                  << "int8_t" << "int16_t" << "int32_t" << "int64_t"
+                                  << "uint8_t" << "uint16_t" << "uint32_t" << "uint64_t"
+                                  << "size_t" << "std";
+        def.comments.linePrefix = "//";
+        def.comments.blockStart = "/*";
+        def.comments.blockEnd = "*/";
+    } else if (lang == Language::Python) {
+        def.id = "python";
+        def.name = "Python";
+        def.extensions = QStringList() << "py" << "pyw" << "pyi";
+        def.keywords = QStringList() << "and" << "as" << "assert" << "async" << "await"
+                                     << "break" << "class" << "continue" << "def" << "del"
+                                     << "elif" << "else" << "except" << "False" << "finally"
+                                     << "for" << "from" << "global" << "if" << "import"
+                                     << "in" << "is" << "lambda" << "None" << "nonlocal"
+                                     << "not" << "or" << "pass" << "raise" << "return"
+                                     << "True" << "try" << "while" << "with" << "yield";
+        def.builtins = QStringList() << "print" << "len" << "range" << "str" << "int"
+                                     << "float" << "list" << "dict" << "set" << "tuple"
+                                     << "bool" << "type" << "super" << "isinstance" << "open";
+        def.comments.linePrefix = "#";
+        def.comments.blockStart = "\"\"\"";
+        def.comments.blockEnd = "\"\"\"";
+    }
+    return def;
+}
+
 void SyntaxHighlighter::setLanguage(Language lang) {
     m_language = lang;
+    LanguageDefinition def;
     if (lang == Language::C) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("c"));
+        def = LanguageRegistry::instance().definitionForId("c");
     } else if (lang == Language::Cpp) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("cpp"));
+        def = LanguageRegistry::instance().definitionForId("cpp");
     } else if (lang == Language::Python) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("python"));
+        def = LanguageRegistry::instance().definitionForId("python");
+    }
+
+    if (def.isValid()) {
+        setLanguageDefinition(def);
     } else {
-        setLanguageDefinition(LanguageDefinition());
+        LanguageDefinition fallback = fallbackDefinitionForLanguage(lang);
+        if (fallback.isValid()) {
+            setLanguageDefinition(fallback);
+            m_language = lang;
+        } else {
+            setLanguageDefinition(LanguageDefinition());
+        }
     }
 }
 
