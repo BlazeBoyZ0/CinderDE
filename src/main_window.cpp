@@ -774,34 +774,36 @@ void MainWindow::openFolder() {
     }
 }
 
-void MainWindow::saveFile() {
+bool MainWindow::saveFile() {
     EditorTab *tab = currentTab();
-    if (!tab) return;
+    if (!tab) return false;
 
     if (tab->isUntitled()) {
-        saveFileAs();
-    } else {
-        if (tab->save()) {
-            updateTabTitle(tab);
-            statusBar()->showMessage("File saved", 2000);
-            saveSessionState();
-        }
+        return saveFileAs();
     }
+
+    if (!tab->save()) return false;
+
+    updateTabTitle(tab);
+    statusBar()->showMessage("File saved", 2000);
+    saveSessionState();
+    return true;
 }
 
-void MainWindow::saveFileAs() {
+bool MainWindow::saveFileAs() {
     EditorTab *tab = currentTab();
-    if (!tab) return;
+    if (!tab) return false;
 
     QString defaultName = tab->filePath().isEmpty() ? tab->fileName() : tab->filePath();
     QString filePath = QFileDialog::getSaveFileName(this, "Save File As", defaultName, "All Files (*)");
-    if (!filePath.isEmpty()) {
-        if (tab->saveAs(filePath)) {
-            updateTabTitle(tab);
-            statusBar()->showMessage("File saved", 2000);
-            saveSessionState();
-        }
-    }
+    if (filePath.isEmpty()) return false;
+
+    if (!tab->saveAs(filePath)) return false;
+
+    updateTabTitle(tab);
+    statusBar()->showMessage("File saved", 2000);
+    saveSessionState();
+    return true;
 }
 
 bool MainWindow::promptSaveIfModified(EditorTab *tab) {
@@ -928,7 +930,7 @@ void MainWindow::showPreferencesDialog() {
 }
 
 void MainWindow::buildAndRun() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 
@@ -938,7 +940,7 @@ void MainWindow::buildAndRun() {
 }
 
 void MainWindow::buildOnly() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 
@@ -948,7 +950,7 @@ void MainWindow::buildOnly() {
 }
 
 void MainWindow::runOnly() {
-    saveFile();
+    if (!saveFile()) return;
     m_outputPanel->setVisible(true);
     if (m_toggleOutputPanelAction) m_toggleOutputPanelAction->setChecked(true);
 
