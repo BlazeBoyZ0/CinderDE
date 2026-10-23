@@ -1,4 +1,4 @@
-# CinderDE v0.9
+# CinderDE v1.0.0
 
 CinderDE (Cinder Development Environment) is a lightweight desktop code editor built with C++17 and Qt 6 Widgets. It targets Linux desktops with limited RAM while providing a practical coding workflow.
 
@@ -17,12 +17,12 @@ CinderDE keeps language intelligence optional: users install and configure exter
 - Keyboard shortcuts for common editing actions and navigation.
 
 ### Syntax highlighting and completion
-- Built-in syntax highlighting for C, C++, and Python.
-- Lightweight word completion based on language keywords, built-ins, and identifiers in the current document.
+- Optional syntax highlighting driven by user-installed language definition packs; no language packs are bundled.
+- Lightweight word completion can use keywords and built-ins from user-installed language definition packs, plus identifiers in the current document.
 - Built-in word completion remains available without an LSP.
 
 ### Optional Language Server Protocol (LSP)
-- Configure external language servers with executable, arguments, language ID, file extensions, and environment settings.
+- Configure external language servers with executable, arguments, a manually entered language ID, file extensions, and environment settings.
 - Optional language-aware completion, diagnostics, hover information, go to definition, find references, and rename, depending on server capabilities.
 - Debounced completion requests to reduce unnecessary background traffic.
 - Server status and logs to help diagnose startup and runtime problems.
@@ -79,7 +79,7 @@ ctest --test-dir build --output-on-failure
 4. Set the language ID and file extensions the server handles, then enable the configuration.
 5. Open a matching source file in a workspace and check the LSP status/log panel.
 
-For example, Pyright can be configured as an external server for Python files using language ID `python`, extension `py`, and the executable/arguments recommended by Pyright's installation instructions.
+Language IDs and file extensions are entered manually to match the external server's own documentation. CinderDE does not provide a predefined language list.
 
 ## Scope
 
@@ -87,4 +87,4 @@ CinderDE is a lightweight, extensible coding environment, not a full replacement
 
 ## Release status
 
-Version 0.9 is undergoing final build and regression validation. The repository's build and test commands above are provided for release verification; a successful build or test run should not be assumed until those commands have been executed successfully on the target environment.
+Version 1.0.0 is being finalized. CinderDE ships without built-in language support packs; users may add their own JSON language definitions and configure external language servers. The repository's build and test commands above are provided for release verification; a successful build or test run should not be assumed until those commands have been executed successfully on the target environment.
