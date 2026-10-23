@@ -811,6 +811,14 @@ bool MainWindow::saveFileAs() {
     QString filePath = QFileDialog::getSaveFileName(this, "Save File As", defaultName, "All Files (*)");
     if (filePath.isEmpty()) return false;
 
+    EditorTab *existing = findTabByPath(filePath);
+    if (existing && existing != tab) {
+        QMessageBox::warning(
+            this, "File Already Open",
+            QString("The file is already open in another tab:\n%1").arg(filePath));
+        return false;
+    }
+
     if (!tab->saveAs(filePath)) return false;
 
     updateTabTitle(tab);
@@ -832,6 +840,15 @@ bool MainWindow::promptSaveIfModified(EditorTab *tab) {
         if (tab->isUntitled()) {
             QString filePath = QFileDialog::getSaveFileName(this, "Save File As", tab->fileName(), "All Files (*)");
             if (filePath.isEmpty()) return false; // Canceled save as
+
+            EditorTab *existing = findTabByPath(filePath);
+            if (existing && existing != tab) {
+                QMessageBox::warning(
+                    this, "File Already Open",
+                    QString("The file is already open in another tab:\n%1").arg(filePath));
+                return false;
+            }
+
             return tab->saveAs(filePath);
         } else {
             return tab->save();
