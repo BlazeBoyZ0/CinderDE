@@ -57,7 +57,7 @@ set(HEADERS
 
 add_executable(cinderde ${SOURCES} ${HEADERS})
 
-target_compile_definitions(cinderde PRIVATE CINDERDE_VERSION=\"\${PROJECT_VERSION}\")
+target_compile_definitions(cinderde PRIVATE CINDERDE_VERSION=\"${PROJECT_VERSION}\")
 
 target_link_libraries(cinderde PRIVATE
     Qt6::Widgets
