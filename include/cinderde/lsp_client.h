@@ -84,6 +84,7 @@ private:
     QMap<int, PendingRequest> m_pendingRequests;
 
     void updateStatus(LspServerState state, const QString &errorMsg = QString());
+    void failPendingRequests(const QString &message);
     void sendJsonRpc(const QJsonObject &obj);
     void processIncomingBuffer();
     void handleMessage(const QJsonObject &doc);
