@@ -43,6 +43,17 @@ void LspClient::start() {
         return;
     }
 
+    if (m_process) {
+        if (m_process->state() != QProcess::NotRunning) {
+            const QString message = "Cannot restart language server while its previous process is still running";
+            updateStatus(LspServerState::Failed, message);
+            emit serverError(message);
+            return;
+        }
+        m_process->deleteLater();
+        m_process = nullptr;
+    }
+
     if (!m_config.isValid()) {
         updateStatus(LspServerState::Failed, "Invalid language server configuration");
         emit serverError("Invalid language server configuration");
@@ -92,7 +103,7 @@ void LspClient::stop() {
     }
 
     if (!m_process || m_process->state() != QProcess::Running) {
-        m_pendingRequests.clear();
+        failPendingRequests("Language server stopped before the request completed");
         m_readBuffer.clear();
         if (m_process) {
             m_process->deleteLater();
@@ -102,6 +113,7 @@ void LspClient::stop() {
         return;
     }
 
+    failPendingRequests("Language server is stopping");
     updateStatus(LspServerState::Stopping);
 
     // Shutdown is asynchronous: never block the GUI thread waiting for an LSP
@@ -133,6 +145,20 @@ void LspClient::stop() {
             });
         }
     });
+}
+
+void LspClient::failPendingRequests(const QString &message) {
+    const auto pendingRequests = m_pendingRequests;
+    m_pendingRequests.clear();
+
+    QJsonObject error;
+    error["code"] = -32000;
+    error["message"] = message;
+    for (const PendingRequest &pending : pendingRequests) {
+        if (pending.callback) {
+            pending.callback(QJsonValue(), error, true);
+        }
+    }
 }
 
 void LspClient::sendJsonRpc(const QJsonObject &obj) {
@@ -358,12 +384,25 @@ void LspClient::handleNotification(const QJsonObject &notif) {
 }
 
 void LspClient::handleRequest(const QJsonObject &req) {
-    // Respond with empty/null for server-initiated requests
-    int id = req.value("id").toInt(0);
+    const int id = req.value("id").toInt(0);
+    const QString method = req.value("method").toString();
     QJsonObject resp;
     resp["jsonrpc"] = "2.0";
     resp["id"] = id;
-    resp["result"] = QJsonValue::Null;
+
+    if (method == "workspace/configuration") {
+        const QJsonArray items = req.value("params").toObject().value("items").toArray();
+        QJsonArray settings;
+        for (int i = 0; i < items.size(); ++i) {
+            // CinderDE does not currently expose per-section workspace settings.
+            // JSON null represents an unavailable configuration value.
+            settings.append(QJsonValue(QJsonValue::Null));
+        }
+        resp["result"] = settings;
+    } else {
+        // Unsupported server-initiated requests receive an empty result.
+        resp["result"] = QJsonValue::Null;
+    }
     sendJsonRpc(resp);
 }
 
@@ -380,6 +419,7 @@ void LspClient::onProcessErrorOccurred(QProcess::ProcessError error) {
     } else {
         updateStatus(LspServerState::Failed, errStr);
     }
+    failPendingRequests(m_status.lastError.isEmpty() ? "Language server process error" : m_status.lastError);
     emit serverError(m_status.lastError);
 }
 
@@ -393,6 +433,11 @@ void LspClient::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
         updateStatus(LspServerState::Failed, QString("Server crashed with exit code %1").arg(exitCode));
     } else {
         updateStatus(LspServerState::Stopped, QString("Server stopped with exit code %1").arg(exitCode));
+    }
+    failPendingRequests(m_status.lastError.isEmpty() ? "Language server process exited" : m_status.lastError);
+    if (m_process) {
+        m_process->deleteLater();
+        m_process = nullptr;
     }
 }
 
