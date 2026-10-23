@@ -31,8 +31,8 @@ private slots:
     void newFile();
     void openFile();
     void openFolder();
-    void saveFile();
-    void saveFileAs();
+    bool saveFile();
+    bool saveFileAs();
     void closeTab(int index);
     void closeCurrentTab();
 
