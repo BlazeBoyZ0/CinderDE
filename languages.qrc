@@ -1,7 +1,0 @@
-<RCC>
-    <qresource prefix="/">
-        <file>resources/languages/c.json</file>
-        <file>resources/languages/cpp.json</file>
-        <file>resources/languages/python.json</file>
-    </qresource>
-</RCC>
