@@ -1,0 +1,90 @@
+{
+  "id": "go",
+  "name": "Go",
+  "extensions": [
+    "go"
+  ],
+  "keywords": [
+    "break",
+    "case",
+    "chan",
+    "const",
+    "continue",
+    "default",
+    "defer",
+    "else",
+    "fallthrough",
+    "for",
+    "func",
+    "go",
+    "goto",
+    "if",
+    "import",
+    "interface",
+    "map",
+    "package",
+    "range",
+    "return",
+    "select",
+    "struct",
+    "switch",
+    "type",
+    "var"
+  ],
+  "types": [
+    "bool",
+    "byte",
+    "complex64",
+    "complex128",
+    "error",
+    "float32",
+    "float64",
+    "int",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "rune",
+    "string",
+    "uint",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "uintptr"
+  ],
+  "builtins": [
+    "append",
+    "cap",
+    "clear",
+    "close",
+    "complex",
+    "copy",
+    "delete",
+    "imag",
+    "len",
+    "make",
+    "max",
+    "min",
+    "new",
+    "panic",
+    "print",
+    "println",
+    "real",
+    "recover"
+  ],
+  "comments": {
+    "line": "//",
+    "block_start": "/*",
+    "block_end": "*/"
+  },
+  "indentation": {
+    "tab_size": 4,
+    "use_spaces": true,
+    "auto_indent_on_brace": true
+  },
+  "build_run": {
+    "build_command": "go build -o \"${fileDir}/${fileBase}\" \"${file}\"",
+    "run_command": "\"${fileDir}/${fileBase}\""
+  }
+}

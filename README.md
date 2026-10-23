@@ -1,90 +1,30 @@
-# CinderDE v0.9
+# CinderDE
 
-CinderDE (Cinder Development Environment) is a lightweight desktop code editor built with C++17 and Qt 6 Widgets. It targets Linux desktops with limited RAM while providing a practical coding workflow.
+**CinderDE (Cinder Development Environment)** is a lightweight desktop code editor built with C++17 and Qt 6 Widgets. It focuses on a practical editing and build/run workflow with a low-overhead approach, customizable language support, and optional external development tools.
 
-CinderDE keeps language intelligence optional: users install and configure external Language Server Protocol (LSP) programs instead of having language servers bundled into the application.
+## At a glance
 
-## Features
+- Lightweight desktop editor with tabs, file explorer, workspace/session restoration, and common editing tools.
+- Configurable build and run commands.
+- Optional language intelligence through external Language Server Protocol (LSP) servers.
+- User-installed JSON language packs for language-specific editor metadata.
+- No bundled language definition packs or language servers.
 
-### Editing and navigation
-- Dark charcoal UI with ember-orange accents.
-- Tabbed editing, unsaved-change indicators, and prompts before discarding changes.
-- Create, open, save, and Save As files, with safer file-write handling.
-- Line numbers, current-line highlighting, matching-bracket highlighting, smart indentation, bracket pairing, and configurable tab size.
-- Find and replace, line/column status, font-size controls, and optional word wrap.
-- Workspace file explorer for browsing, creating, renaming, and deleting files and folders.
-- Session and workspace restoration, including an option to restore the previous workspace and tabs.
-- Keyboard shortcuts for common editing actions and navigation.
+CinderDE may suit developers who want a straightforward editor and prefer choosing their own language tools. External servers and toolchains must be installed separately.
 
-### Syntax highlighting and completion
-- Built-in syntax highlighting for C, C++, and Python.
-- Lightweight word completion based on language keywords, built-ins, and identifiers in the current document.
-- Built-in word completion remains available without an LSP.
+## Documentation
 
-### Optional Language Server Protocol (LSP)
-- Configure external language servers with executable, arguments, language ID, file extensions, and environment settings.
-- Optional language-aware completion, diagnostics, hover information, go to definition, find references, and rename, depending on server capabilities.
-- Debounced completion requests to reduce unnecessary background traffic.
-- Server status and logs to help diagnose startup and runtime problems.
-- LSP can remain disabled for a lighter memory footprint. Resource usage depends on the external server and workspace.
+- **[Project overview](guide/info.md)** — features, goals, and intended audience.
+- **[Installation and build](guide/installation.md)** — dependencies, building, launching, and tests.
+- **[Language Server Protocol (LSP)](guide/lsp.md)** — configure external language servers.
+- **[Language packs](guide/language-pack.md)** — create and install user-defined JSON language packs.
+- **[Limitations and scope](guide/limitations.md)** — current boundaries and dependencies.
 
-CinderDE does not bundle language servers. Install compatible servers separately and configure them in the LSP settings.
+## Project details
 
-### Build and run
-- Configurable build and run commands, with macro substitution for file, workspace, and working-directory paths.
-- Build/run output panel with diagnostics navigation and process controls.
-- Optional external-terminal execution where supported by the configured workflow.
-- Save failures prevent build/run actions from proceeding with unsaved editor content.
-- Workspace build/run settings are persisted, with safer handling of configuration-file writes.
+- **Language:** C++17
+- **GUI framework:** Qt 6 Widgets
+- **Build system:** CMake
+- **Version:** 1.0.0 (finalization in progress)
 
-## Requirements
-
-- C++17 compiler (GCC or Clang).
-- CMake 3.16 or newer.
-- Qt 6 development packages: Core, Gui, Widgets, and Test.
-
-On Ubuntu or Linux Mint:
-
-```bash
-sudo apt update
-sudo apt install build-essential cmake qt6-base-dev
-```
-
-## Build
-
-From the repository root:
-
-```bash
-cmake -B build -S .
-cmake --build build
-```
-
-Launch CinderDE:
-
-```bash
-./build/cinderde
-```
-
-Run the test suite:
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-## Optional language server setup
-
-1. Install a compatible language server for your language. CinderDE does not download or bundle servers.
-2. Open CinderDE's Language Servers settings.
-3. Configure the executable and any required arguments using the server's documented invocation.
-4. Set the language ID and file extensions the server handles, then enable the configuration.
-5. Open a matching source file in a workspace and check the LSP status/log panel.
-
-For example, Pyright can be configured as an external server for Python files using language ID `python`, extension `py`, and the executable/arguments recommended by Pyright's installation instructions.
-
-## Scope
-
-CinderDE is a lightweight, extensible coding environment, not a full replacement for every feature of a heavyweight IDE. It prioritizes low overhead and lets users choose which optional external language tools to install and run. Language intelligence and its resource usage depend on those external tools.
-
-## Release status
-
-Version 0.9 is undergoing final build and regression validation. The repository's build and test commands above are provided for release verification; a successful build or test run should not be assumed until those commands have been executed successfully on the target environment.
+For detailed instructions and caveats, start with the guides above.

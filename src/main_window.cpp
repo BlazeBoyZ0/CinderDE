@@ -19,6 +19,14 @@
 #include <QToolButton>
 #include <QTextBlock>
 #include <QTextCursor>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QHeaderView>
+#include <QTableWidget>
+#include <QVBoxLayout>
+#include <QSet>
 
 namespace CinderDE {
 
@@ -285,6 +293,10 @@ void MainWindow::setupMenus() {
 
     // --- Help Menu ---
     QMenu *helpMenu = menuBar->addMenu("&Help");
+    helpMenu->addAction("&CinderDE Guide", this, &MainWindow::openGuide);
+    helpMenu->addAction("&Keyboard Shortcuts", this, &MainWindow::showKeyboardShortcuts);
+    helpMenu->addAction("&Report a Bug", this, &MainWindow::reportBug);
+    helpMenu->addSeparator();
     helpMenu->addAction("&About CinderDE", this, &MainWindow::about);
 }
 
@@ -1115,12 +1127,81 @@ void MainWindow::resetFontSize() {
     }
 }
 
+void MainWindow::openGuide() {
+    const QUrl url("https://github.com/BlazeBoyZ0/CinderDE/blob/v1.0-finalising-gpt/guide/info.md");
+    if (!QDesktopServices::openUrl(url)) {
+        QMessageBox::warning(this, "Unable to Open Guide",
+                             "CinderDE could not open your web browser.\n\nYou can read the guide at:\n" + url.toString());
+    }
+}
+
+void MainWindow::reportBug() {
+    const QUrl url("https://github.com/BlazeBoyZ0/CinderDE/issues");
+    if (!QDesktopServices::openUrl(url)) {
+        QMessageBox::warning(this, "Unable to Open Bug Tracker",
+                             "CinderDE could not open your web browser.\n\nYou can report issues at:\n" + url.toString());
+    }
+}
+
+void MainWindow::showKeyboardShortcuts() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("CinderDE Keyboard Shortcuts");
+    dialog.resize(520, 420);
+
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *table = new QTableWidget(&dialog);
+    table->setColumnCount(2);
+    table->setHorizontalHeaderLabels({"Action", "Shortcut"});
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setSelectionBehavior(QAbstractItemView::SelectRows);
+    table->setSelectionMode(QAbstractItemView::SingleSelection);
+    table->verticalHeader()->setVisible(false);
+    table->horizontalHeader()->setStretchLastSection(true);
+    table->setAlternatingRowColors(true);
+
+    QSet<QAction *> seen;
+    QList<QAction *> actions = findChildren<QAction *>();
+    for (QAction *action : actions) {
+        if (!action || seen.contains(action) || action->isSeparator() || action->shortcut().isEmpty())
+            continue;
+        seen.insert(action);
+
+        QString actionName = action->text();
+        actionName.remove('&');
+        actionName = actionName.trimmed();
+        if (actionName.isEmpty())
+            continue;
+
+        const int row = table->rowCount();
+        table->insertRow(row);
+        table->setItem(row, 0, new QTableWidgetItem(actionName));
+        table->setItem(row, 1, new QTableWidgetItem(action->shortcut().toString(QKeySequence::NativeText)));
+    }
+    table->sortItems(0, Qt::AscendingOrder);
+    table->resizeColumnToContents(0);
+    layout->addWidget(table);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
+    connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    layout->addWidget(buttons);
+
+    dialog.exec();
+}
+
 void MainWindow::about() {
+#ifndef CINDERDE_VERSION
+#define CINDERDE_VERSION "unknown"
+#endif
+    const QString version = QString::fromLatin1(CINDERDE_VERSION);
     QMessageBox::about(
         this, "About CinderDE",
-        "<h3>CinderDE v0.6</h3>"
-        "<p>A lightweight desktop code editor built with Qt 6 for Linux.</p>"
-        "<p>Featuring Smart Editing, Syntax Highlighting, Smart Indentation, Bracket Pairing, Code Completion, and Build/Run Tools.</p>");
+        QString("<h3>CinderDE v%1</h3>"
+                "<p>A lightweight desktop code editor built with C++17 and Qt 6 Widgets.</p>"
+                "<p>CinderDE focuses on a responsive, low-overhead editing experience with workspace browsing, "
+                "editing tools, configurable build/run workflows, and optional external language-server debugging support.</p>"
+                "<p><a href=\"https://github.com/BlazeBoyZ0/CinderDE\">GitHub repository</a></p>")
+            .arg(version));
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {

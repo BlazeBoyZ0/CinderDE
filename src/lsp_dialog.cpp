@@ -1,7 +1,6 @@
 #include "cinderde/lsp_dialog.h"
 #include "cinderde/lsp_manager.h"
 #include "cinderde/preferences.h"
-#include "cinderde/language_pack.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFormLayout>
@@ -25,12 +24,7 @@ LspConfigEditDialog::LspConfigEditDialog(const LspServerConfig &config, QWidget 
 
     if (!config.id.isEmpty()) {
         m_nameEdit->setText(config.name);
-        int idx = m_languageCombo->findData(config.languageId);
-        if (idx != -1) {
-            m_languageCombo->setCurrentIndex(idx);
-        } else {
-            m_languageCombo->setCurrentText(config.languageId);
-        }
+        m_languageIdEdit->setText(config.languageId);
         m_extensionsEdit->setText(config.extensions.join(", "));
         m_executableEdit->setText(config.executable);
         m_argumentsEdit->setText(config.arguments.join(" "));
@@ -52,14 +46,13 @@ void LspConfigEditDialog::setupUi() {
     QFormLayout *formLayout = new QFormLayout();
 
     m_nameEdit = new QLineEdit(this);
-    m_nameEdit->setPlaceholderText("e.g. Pyright, Clangd, Rust Analyzer");
+    m_nameEdit->setPlaceholderText("Language server display name");
 
-    m_languageCombo = new QComboBox(this);
-    m_languageCombo->setEditable(true);
-    populateLanguageCombo();
+    m_languageIdEdit = new QLineEdit(this);
+    m_languageIdEdit->setPlaceholderText("Enter the language ID used by the server");
 
     m_extensionsEdit = new QLineEdit(this);
-    m_extensionsEdit->setPlaceholderText("e.g. py, c, cpp, h (comma separated)");
+    m_extensionsEdit->setPlaceholderText("Comma-separated file extensions, without dots");
 
     QHBoxLayout *execLayout = new QHBoxLayout();
     m_executableEdit = new QLineEdit(this);
@@ -78,7 +71,7 @@ void LspConfigEditDialog::setupUi() {
     m_enabledCB = new QCheckBox("Enable server", this);
 
     formLayout->addRow("Display Name:", m_nameEdit);
-    formLayout->addRow("Language ID:", m_languageCombo);
+    formLayout->addRow("Language ID:", m_languageIdEdit);
     formLayout->addRow("File Extensions:", m_extensionsEdit);
     formLayout->addRow("Executable:", execLayout);
     formLayout->addRow("Arguments:", m_argumentsEdit);
@@ -101,26 +94,6 @@ void LspConfigEditDialog::setupUi() {
     mainLayout->addLayout(btnLayout);
 }
 
-void LspConfigEditDialog::populateLanguageCombo() {
-    static const QList<QPair<QString, QString>> langs = {
-        {"C / C++", "cpp"},
-        {"Python", "python"},
-        {"JavaScript", "javascript"},
-        {"TypeScript", "typescript"},
-        {"Java", "java"},
-        {"Kotlin", "kotlin"},
-        {"Shell Script", "shellscript"},
-        {"JSON", "json"},
-        {"CMake", "cmake"},
-        {"HTML", "html"},
-        {"CSS", "css"},
-        {"YAML", "yaml"}
-    };
-
-    for (const auto &pair : langs) {
-        m_languageCombo->addItem(pair.first, pair.second);
-    }
-}
 
 void LspConfigEditDialog::browseExecutable() {
     QString path = QFileDialog::getOpenFileName(this, "Select Executable");
@@ -131,10 +104,7 @@ void LspConfigEditDialog::browseExecutable() {
 
 void LspConfigEditDialog::validateAndAccept() {
     QString name = m_nameEdit->text().trimmed();
-    QString langId = m_languageCombo->currentData().toString();
-    if (langId.isEmpty()) {
-        langId = m_languageCombo->currentText().trimmed();
-    }
+    QString langId = m_languageIdEdit->text().trimmed();
     QString exec = m_executableEdit->text().trimmed();
 
     if (name.isEmpty()) {
@@ -145,7 +115,7 @@ void LspConfigEditDialog::validateAndAccept() {
 
     if (langId.isEmpty()) {
         QMessageBox::warning(this, "Validation Error", "Please specify a language ID.");
-        m_languageCombo->setFocus();
+        m_languageIdEdit->setFocus();
         return;
     }
 
@@ -185,10 +155,7 @@ LspServerConfig LspConfigEditDialog::config() const {
     cfg.id = m_configId;
     cfg.name = m_nameEdit->text().trimmed();
 
-    QString langId = m_languageCombo->currentData().toString();
-    if (langId.isEmpty()) {
-        langId = m_languageCombo->currentText().trimmed();
-    }
+    QString langId = m_languageIdEdit->text().trimmed();
     cfg.languageId = langId;
 
     QString rawExts = m_extensionsEdit->text().trimmed();

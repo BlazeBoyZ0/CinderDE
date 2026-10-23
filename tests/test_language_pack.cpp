@@ -45,25 +45,12 @@ private slots:
         QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(doc.object()));
     }
 
-    void testBuiltinDiscoveryAndRegressions() {
+    void testNoBundledLanguagePacks() {
         CinderDE::LanguageRegistry &registry = CinderDE::LanguageRegistry::instance();
 
-        // Built-in C, C++, Python must always be discoverable
-        QVERIFY(registry.hasDefinition("c"));
-        QVERIFY(registry.hasDefinition("cpp"));
-        QVERIFY(registry.hasDefinition("python"));
-
-        CinderDE::LanguageDefinition cDef = registry.definitionForId("c");
-        QVERIFY(cDef.isValid());
-        QCOMPARE(cDef.name, QString("C Source"));
-
-        CinderDE::LanguageDefinition cppDef = registry.definitionForId("cpp");
-        QVERIFY(cppDef.isValid());
-        QCOMPARE(cppDef.name, QString("C++ Source"));
-
-        CinderDE::LanguageDefinition pyDef = registry.definitionForId("python");
-        QVERIFY(pyDef.isValid());
-        QCOMPARE(pyDef.name, QString("Python Source"));
+        QVERIFY(!registry.hasDefinition("c"));
+        QVERIFY(!registry.hasDefinition("cpp"));
+        QVERIFY(!registry.hasDefinition("python"));
     }
 
     void testUserPackDirectoryCreationAndDiscovery() {
@@ -99,25 +86,25 @@ private slots:
     void testDuplicateIdentifierRejection() {
         CinderDE::LanguageRegistry &registry = CinderDE::LanguageRegistry::instance();
 
-        // Try to register user pack with duplicate ID "cpp"
+        // Try to register a duplicate of the custom test language "kekno"
         QString duplicateCppJson = R"({
-            "id": "cpp",
-            "name": "User Override CPP",
-            "extensions": ["cpp_override"]
+            "id": "kekno",
+            "name": "Duplicate Test Language",
+            "extensions": ["duplicate"]
         })";
 
         QJsonDocument doc = QJsonDocument::fromJson(duplicateCppJson.toUtf8());
         QVERIFY(doc.isObject());
-        bool result = registry.loadFromJson(doc.object(), "user_cpp.json", CinderDE::LanguagePackSource::User);
+        bool result = registry.loadFromJson(doc.object(), "duplicate_language.json", CinderDE::LanguagePackSource::User);
 
         QVERIFY(!result);
-        // Built-in definition remains untouched
-        QCOMPARE(registry.definitionForId("cpp").name, QString("C++ Source"));
+        // Existing user definition remains untouched
+        QCOMPARE(registry.definitionForId("kekno").name, QString("Kekno Source"));
 
         // Check error reporting in packInfos
         bool duplicateFound = false;
         for (const auto &info : registry.packInfos()) {
-            if (info.id == "cpp" && !info.loaded) {
+            if (info.id == "kekno" && !info.loaded) {
                 duplicateFound = true;
                 QVERIFY(info.statusMessage.contains("Duplicate identifier"));
             }

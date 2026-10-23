@@ -96,7 +96,7 @@ void PreferencesDialog::setupLanguagePacksTab() {
     layout->setSpacing(10);
 
     QHBoxLayout *topLayout = new QHBoxLayout();
-    QLabel *infoLabel = new QLabel("Discovered Language Packs (Built-in and User Installed):", packsTab);
+    QLabel *infoLabel = new QLabel("User-installed Language Packs (optional):", packsTab);
     m_openPacksFolderBtn = new QPushButton("Open Language Packs Folder", packsTab);
     connect(m_openPacksFolderBtn, &QPushButton::clicked, this, &PreferencesDialog::openLanguagePacksFolder);
 
@@ -140,7 +140,7 @@ void PreferencesDialog::populateLanguagePacksTable() {
         QTableWidgetItem *nameItem = new QTableWidgetItem(info.name.isEmpty() ? "(Unknown)" : info.name);
         QTableWidgetItem *idItem = new QTableWidgetItem(info.id);
         QTableWidgetItem *extItem = new QTableWidgetItem(info.extensions.join(", "));
-        QTableWidgetItem *srcItem = new QTableWidgetItem(info.source == LanguagePackSource::Builtin ? "Built-in" : "User Pack");
+        QTableWidgetItem *srcItem = new QTableWidgetItem("User Pack");
         QTableWidgetItem *statusItem = new QTableWidgetItem(info.statusMessage);
 
         if (!info.loaded) {

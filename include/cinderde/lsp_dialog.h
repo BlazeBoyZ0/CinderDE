@@ -6,7 +6,6 @@
 #include <QPushButton>
 #include <QLineEdit>
 #include <QCheckBox>
-#include <QComboBox>
 #include <QTextEdit>
 #include <QLabel>
 #include <QTimer>
@@ -27,7 +26,7 @@ private slots:
 
 private:
     QLineEdit *m_nameEdit;
-    QComboBox *m_languageCombo;
+    QLineEdit *m_languageIdEdit;
     QLineEdit *m_extensionsEdit;
     QLineEdit *m_executableEdit;
     QLineEdit *m_argumentsEdit;
@@ -37,7 +36,6 @@ private:
     QString m_configId;
 
     void setupUi();
-    void populateLanguageCombo();
 };
 
 class LspDialog : public QDialog {

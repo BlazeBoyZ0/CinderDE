@@ -1,0 +1,89 @@
+{
+  "id": "c",
+  "name": "C",
+  "extensions": [
+    "c",
+    "h"
+  ],
+  "keywords": [
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "_Alignas",
+    "_Atomic",
+    "_Bool",
+    "_Complex",
+    "_Generic",
+    "_Imaginary",
+    "_Noreturn",
+    "_Static_assert",
+    "_Thread_local"
+  ],
+  "types": [
+    "size_t",
+    "ptrdiff_t",
+    "FILE",
+    "bool"
+  ],
+  "builtins": [
+    "printf",
+    "scanf",
+    "fprintf",
+    "fopen",
+    "fclose",
+    "malloc",
+    "calloc",
+    "realloc",
+    "free",
+    "memcpy",
+    "strlen",
+    "strcmp",
+    "strcpy",
+    "sqrt"
+  ],
+  "comments": {
+    "line": "//",
+    "block_start": "/*",
+    "block_end": "*/"
+  },
+  "indentation": {
+    "tab_size": 4,
+    "use_spaces": true,
+    "auto_indent_on_brace": true
+  },
+  "build_run": {
+    "build_command": "gcc -std=c11 -Wall -Wextra \"${file}\" -o \"${fileDir}/${fileBase}\"",
+    "run_command": "\"${fileDir}/${fileBase}\""
+  }
+}
