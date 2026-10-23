@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(CinderDE VERSION 0.8.0 LANGUAGES CXX)
+project(CinderDE VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,6 @@ set(SOURCES
     src/lsp_client.cpp
     src/lsp_manager.cpp
     src/lsp_dialog.cpp
-    languages.qrc
 )
 
 set(HEADERS
@@ -70,7 +69,6 @@ add_executable(cinderde_tests
     tests/test_file_type_detector.cpp
     src/file_type_detector.cpp
     src/language_pack.cpp
-    languages.qrc
 )
 
 target_link_libraries(cinderde_tests PRIVATE
@@ -90,7 +88,6 @@ add_executable(editor_tab_tests
     src/language_pack.cpp
     src/lsp_client.cpp
     src/lsp_manager.cpp
-    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -118,7 +115,6 @@ add_executable(syntax_highlighter_tests
     src/language_pack.cpp
     src/lsp_client.cpp
     src/lsp_manager.cpp
-    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -163,7 +159,6 @@ add_executable(workspace_session_tests
     src/language_pack.cpp
     src/lsp_client.cpp
     src/lsp_manager.cpp
-    languages.qrc
     include/cinderde/preferences.h
     include/cinderde/workspace_config.h
     include/cinderde/editor_tab.h
@@ -201,7 +196,6 @@ add_executable(build_run_manager_tests
     src/preferences.cpp
     src/workspace_config.cpp
     src/language_pack.cpp
-    languages.qrc
     include/cinderde/build_run_manager.h
 )
 
@@ -234,7 +228,6 @@ add_executable(v05_features_tests
     src/preferences.cpp
     src/workspace_config.cpp
     src/language_pack.cpp
-    languages.qrc
     include/cinderde/build_run_manager.h
 )
 
@@ -255,7 +248,6 @@ add_executable(code_completion_tests
     src/language_pack.cpp
     src/lsp_client.cpp
     src/lsp_manager.cpp
-    languages.qrc
     include/cinderde/editor_tab.h
     include/cinderde/code_completion.h
     include/cinderde/syntax_highlighter.h
@@ -285,7 +277,6 @@ add_executable(language_pack_tests
     src/workspace_config.cpp
     src/lsp_client.cpp
     src/lsp_manager.cpp
-    languages.qrc
     include/cinderde/language_pack.h
     include/cinderde/file_type_detector.h
     include/cinderde/syntax_highlighter.h
@@ -313,7 +304,6 @@ add_executable(lsp_tests
     src/preferences.cpp
     src/file_type_detector.cpp
     src/language_pack.cpp
-    languages.qrc
     include/cinderde/lsp_types.h
     include/cinderde/lsp_client.h
     include/cinderde/lsp_manager.h
