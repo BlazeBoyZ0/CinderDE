@@ -614,9 +614,20 @@ EditorTab* MainWindow::tabAt(int index) const {
 
 EditorTab* MainWindow::findTabByPath(const QString &filePath) const {
     if (filePath.isEmpty()) return nullptr;
+
+    auto normalizedPath = [](const QString &path) {
+        QFileInfo info(path);
+        const QString canonical = info.canonicalFilePath();
+        // Canonical paths resolve relative/absolute aliases and symbolic links
+        // for existing files. Fall back to an absolute path when resolution
+        // is unavailable, while still normalizing relative path spellings.
+        return canonical.isEmpty() ? QDir::cleanPath(info.absoluteFilePath()) : canonical;
+    };
+
+    const QString targetPath = normalizedPath(filePath);
     for (int i = 0; i < m_tabWidget->count(); ++i) {
         EditorTab *tab = tabAt(i);
-        if (tab && tab->filePath() == filePath) {
+        if (tab && !tab->filePath().isEmpty() && normalizedPath(tab->filePath()) == targetPath) {
             return tab;
         }
     }
