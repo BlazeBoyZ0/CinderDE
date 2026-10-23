@@ -1,17 +1,14 @@
-# CinderDE Language Packs
+# CinderDE User Language Packs
 
-CinderDE v0.7 introduces a lightweight, extensible language configuration system using JSON files.
+CinderDE v1.0.0 ships with no built-in language packs. Users can optionally add language definition JSON files to extend syntax highlighting, completion, comments, indentation, and build/run defaults.
 
 ## Discovery and Search Locations
 
-Language packs (`*.json`) are automatically loaded on startup from the following locations:
+User language packs (`*.json`) are loaded from the application configuration directory:
 
-1. **Embedded Qt Resources**: `:/resources/languages/`
-2. **Local Directory**: `./languages/`
-3. **Application Share Directory**: `../share/cinderde/languages/`
-4. **User Configuration Directory**: `~/.config/cinderde/languages/`
+- **User Configuration Directory**: `~/.config/cinderde/languages/`
 
-User-defined language packs loaded from disk take precedence over default embedded configurations.
+There are no embedded defaults or bundled language definitions.
 
 ## JSON Format Specification
 
@@ -19,14 +16,14 @@ Each language pack is a JSON object with the following fields:
 
 ```json
 {
-  "id": "kekno",
-  "name": "Kekno Source",
-  "extensions": ["kek", "kekno"],
-  "keywords": ["fn", "let", "mut", "if", "else", "return"],
-  "types": ["int", "bool", "str"],
-  "builtins": ["print", "len"],
+  "id": "your-language-id",
+  "name": "Your Language",
+  "extensions": ["ext"],
+  "keywords": ["keyword_one", "keyword_two"],
+  "types": ["type_one", "type_two"],
+  "builtins": ["builtin_one"],
   "comments": {
-    "line": ";",
+    "line": "//",
     "block_start": "/*",
     "block_end": "*/"
   },
@@ -36,24 +33,24 @@ Each language pack is a JSON object with the following fields:
     "auto_indent_on_brace": true
   },
   "build_run": {
-    "build_command": "keknoc \"${file}\" -o \"${fileDir}/${fileBase}\"",
-    "run_command": "\"${fileDir}/${fileBase}\""
+    "build_command": "",
+    "run_command": ""
   }
 }
 ```
 
 ### Field Reference
 
-- `id` (string, required): Lowercase unique language identifier (e.g. `"cpp"`, `"python"`, `"kekno"`).
-- `name` (string, required): Human-readable display name (e.g. `"C++ Source"`).
-- `extensions` (array of strings, optional): List of file extensions without leading dots (e.g. `["cpp", "cc", "hpp"]`).
+- `id` (string, required): Unique language identifier chosen by the user.
+- `name` (string, required): Human-readable display name chosen by the user.
+- `extensions` (array of strings, optional): List of file extensions without leading dots.
 - `keywords` (array of strings, optional): Language keyword tokens.
 - `types` (array of strings, optional): Primitive types and built-in type identifiers.
 - `builtins` (array of strings, optional): Standard library or global functions.
 - `comments` (object, optional):
-  - `line`: Single-line comment prefix string (e.g. `"//"` or `"#"` or `";"`).
-  - `block_start`: Multiline comment opening token (e.g. `"/*"`).
-  - `block_end`: Multiline comment closing token (e.g. `"*/"`).
+  - `line`: Single-line comment prefix string.
+  - `block_start`: Multiline comment opening token.
+  - `block_end`: Multiline comment closing token.
 - `indentation` (object, optional):
   - `tab_size` or `indent_width`: Number of spaces for indent step (default `4`).
   - `use_spaces`: `true` to insert spaces, `false` for tabs.
