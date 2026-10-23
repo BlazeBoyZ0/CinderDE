@@ -204,7 +204,11 @@ std::pair<QString, QString> BuildRunManager::resolveCommands(const QString &file
 
     // Check if CMake workspace
     if (!workspacePath.isEmpty() && QFile::exists(QDir(workspacePath).filePath("CMakeLists.txt"))) {
-        buildCmd = "cmake -B build -S . && cmake --build build";
+        QString absoluteWorkspace = QDir::cleanPath(QFileInfo(workspacePath).absoluteFilePath());
+        QString quotedWorkspace = QString("\"%1\"").arg(absoluteWorkspace);
+        QString quotedBuildDir = QString("\"%1\"").arg(QDir(absoluteWorkspace).filePath("build"));
+        buildCmd = QString("cmake -B %1 -S %2 && cmake --build %1")
+                       .arg(quotedBuildDir, quotedWorkspace);
         if (config.hasRunCommand && !config.runCommand.trimmed().isEmpty()) {
             runCmd = config.runCommand;
         } else {
@@ -288,21 +292,19 @@ void BuildRunManager::run(const QString &filePath, const QString &workspacePath,
     }
 
     // Resolve path-like executables against the process working directory,
-    // not CDE's own current directory.
+    // not CDE's own current directory. Never substitute a different executable
+    // when an explicitly configured path is missing: that can run the wrong program.
     QString exeBin = QProcess::splitCommand(runCmd).value(0);
     if (!exeBin.isEmpty() && (exeBin.contains('/') || exeBin.contains('\\'))) {
         QString resolvedExe = QFileInfo(exeBin).isAbsolute()
                                   ? exeBin
                                   : QDir(workingDir).filePath(exeBin);
         if (!QFileInfo::exists(resolvedExe)) {
-            QString reFound = findCMakeExecutable(workspacePath, workingDir);
-            if (!reFound.isEmpty() && QFile::exists(reFound)) {
-                runCmd = reFound;
-            } else {
-                emit outputReceived(QString("=== ERROR: Executable '%1' not found ===\n").arg(exeBin), false);
-                emit processError(QString("Executable '%1' was not found.").arg(exeBin), false);
-                return;
-            }
+            emit outputReceived(QString("=== ERROR: Executable '%1' not found (checked relative to '%2') ===\n")
+                                    .arg(exeBin, workingDir), false);
+            emit processError(QString("Executable '%1' was not found relative to '%2'.")
+                                  .arg(exeBin, workingDir), false);
+            return;
         }
     }
     QString mode = config.hasExecutionMode ? config.executionMode : Preferences::instance().executionMode();
