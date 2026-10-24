@@ -44,21 +44,6 @@ CodeCompletionPopup::CodeCompletionPopup(CodeEditor *editor)
     connect(this, &QListWidget::itemActivated, this, &CodeCompletionPopup::insertCurrentSuggestion);
 }
 
-QStringList CodeCompletionPopup::getKeywordsForLanguage(Language lang) const {
-    LanguageDefinition def;
-    if (lang == Language::C) {
-        def = LanguageRegistry::instance().definitionForId("c");
-    } else if (lang == Language::Cpp) {
-        def = LanguageRegistry::instance().definitionForId("cpp");
-    } else if (lang == Language::Python) {
-        def = LanguageRegistry::instance().definitionForId("python");
-    }
-    if (def.isValid()) {
-        return getKeywordsForLanguage(def);
-    }
-    return {};
-}
-
 QStringList CodeCompletionPopup::getKeywordsForLanguage(const LanguageDefinition &def) const {
     QStringList result = def.keywords;
     for (const QString &t : def.types) {
@@ -82,19 +67,6 @@ QSet<QString> CodeCompletionPopup::extractDocumentIdentifiers() const {
         identifiers.insert(match.captured(0));
     }
     return identifiers;
-}
-
-void CodeCompletionPopup::updateSuggestions(const QString &prefix, Language lang) {
-    LanguageDefinition def;
-    if (lang == Language::C) def = LanguageRegistry::instance().definitionForId("c");
-    else if (lang == Language::Cpp) def = LanguageRegistry::instance().definitionForId("cpp");
-    else if (lang == Language::Python) def = LanguageRegistry::instance().definitionForId("python");
-
-    if (def.isValid()) {
-        updateSuggestions(prefix, def);
-    } else {
-        updateSuggestions(prefix, LanguageDefinition());
-    }
 }
 
 void CodeCompletionPopup::updateSuggestions(const QString &prefix, const LanguageDefinition &def) {
