@@ -294,10 +294,6 @@ void CodeEditor::handleSmartEnter() {
                 increaseIndent = true;
             }
         }
-    } else {
-        if (trimmedLeft.endsWith('{') || trimmedLeft.endsWith(':')) {
-            increaseIndent = true;
-        }
     }
 
     int tabWidth = m_languageDef.isValid() ? m_languageDef.indentation.tabSize : 4;
@@ -480,10 +476,11 @@ void CodeEditor::toggleComment() {
     int startBlock = document()->findBlock(cursor.selectionStart()).blockNumber();
     int endBlock = document()->findBlock(cursor.selectionEnd()).blockNumber();
 
-    QString commentPrefix = "// ";
-    if (m_languageDef.isValid() && !m_languageDef.comments.linePrefix.isEmpty()) {
-        commentPrefix = m_languageDef.comments.linePrefix + " ";
+    // Comment syntax is language-specific; without an installed pack, do nothing.
+    if (!m_languageDef.isValid() || m_languageDef.comments.linePrefix.isEmpty()) {
+        return;
     }
+    const QString commentPrefix = m_languageDef.comments.linePrefix + " ";
 
     // Check if all non-empty lines in selection are already commented
     bool allCommented = true;
