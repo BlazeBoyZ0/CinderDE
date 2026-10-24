@@ -1,6 +1,8 @@
 #include <QtTest>
 #include "cinderde/editor_tab.h"
 #include "cinderde/code_completion.h"
+#include "cinderde/language_pack.h"
+#include <QJsonDocument>
 
 class TestCodeCompletion : public QObject {
     Q_OBJECT
@@ -18,7 +20,10 @@ private slots:
         editor->setTextCursor(cursor);
 
         CinderDE::CodeCompletionPopup popup(editor);
-        popup.updateSuggestions("my", CinderDE::Language::Cpp);
+        CinderDE::LanguageRegistry::instance().clear();
+        const auto pack = QJsonDocument::fromJson(R"({"id":"custom-cpp","name":"Custom C++","extensions":["cpp"],"keywords":["int","return"]})").object();
+        QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(pack));
+        popup.updateSuggestions("my", CinderDE::LanguageRegistry::instance().definitionForExtension("cpp"));
 
         QVERIFY(popup.count() > 0);
 
