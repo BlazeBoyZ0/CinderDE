@@ -5,51 +5,16 @@ namespace CinderDE {
 
 SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent),
-      m_language(Language::None),
       m_theme(SyntaxTheme::darkTheme())
 {
-}
-
-Language SyntaxHighlighter::languageFromExtension(const QString &extension) {
-    LanguageDefinition def = LanguageRegistry::instance().definitionForExtension(extension);
-    if (def.id == "c") return Language::C;
-    if (def.id == "cpp") return Language::Cpp;
-    if (def.id == "python") return Language::Python;
-
-    QString ext = extension.toLower();
-    if (ext.startsWith('.')) {
-        ext = ext.mid(1);
-    }
-
-    if (ext == "c") {
-        return Language::C;
-    } else if (ext == "cpp" || ext == "cc" || ext == "cxx" || ext == "hpp" || ext == "hxx" || ext == "h") {
-        return Language::Cpp;
-    } else if (ext == "py") {
-        return Language::Python;
-    }
-
-    return Language::None;
 }
 
 LanguageDefinition SyntaxHighlighter::definitionFromExtension(const QString &extension) {
     return LanguageRegistry::instance().definitionForExtension(extension);
 }
 
-void SyntaxHighlighter::setLanguage(Language lang) {
-    m_language = lang;
-    if (lang == Language::None) {
-        setLanguageDefinition(LanguageDefinition());
-    }
-}
-
 void SyntaxHighlighter::setLanguageDefinition(const LanguageDefinition &def) {
     m_languageDef = def;
-
-    if (def.id == "c") m_language = Language::C;
-    else if (def.id == "cpp") m_language = Language::Cpp;
-    else if (def.id == "python") m_language = Language::Python;
-    else m_language = Language::None;
 
     rebuildRulesFromDefinition();
     rehighlight();
