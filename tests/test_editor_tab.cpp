@@ -3,6 +3,23 @@
 #include <QTemporaryDir>
 #include "cinderde/editor_tab.h"
 #include "cinderde/preferences.h"
+#include "cinderde/language_pack.h"
+
+namespace {
+
+CinderDE::LanguageDefinition testCppDefinition() {
+    CinderDE::LanguageDefinition def;
+    def.id = "test-cpp";
+    def.name = "Test C++";
+    def.extensions = {"cpp"};
+    def.comments.linePrefix = "//";
+    def.indentation.tabSize = 4;
+    def.indentation.useSpaces = true;
+    def.indentation.autoIndentOnBrace = true;
+    return def;
+}
+
+} // namespace
 
 class TestEditorTab : public QObject {
     Q_OBJECT
@@ -74,6 +91,7 @@ private slots:
         tab.setFilePath("test.cpp");
 
         auto *editor = tab.editor();
+        editor->setLanguageDefinition(testCppDefinition());
         editor->setPlainText("int main() {");
         QTextCursor cursor = editor->textCursor();
         cursor.movePosition(QTextCursor::End);
