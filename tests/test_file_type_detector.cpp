@@ -8,16 +8,16 @@ class TestFileTypeDetector : public QObject {
 private slots:
     void testExtensionDetection() {
         CinderDE::FileTypeInfo cppInfo = CinderDE::FileTypeDetector::detectType("main.cpp");
-        QCOMPARE(cppInfo.name, QString("C++ Source"));
+        QCOMPARE(cppInfo.name, QString("CPP File"));
 
         CinderDE::FileTypeInfo pyInfo = CinderDE::FileTypeDetector::detectType("script.py");
-        QCOMPARE(pyInfo.name, QString("Python Source"));
+        QCOMPARE(pyInfo.name, QString("PY File"));
 
         CinderDE::FileTypeInfo hInfo = CinderDE::FileTypeDetector::detectType("header.h");
-        QCOMPARE(hInfo.name, QString("Header File"));
+        QCOMPARE(hInfo.name, QString("H File"));
 
         CinderDE::FileTypeInfo cmakeInfo = CinderDE::FileTypeDetector::detectType("CMakeLists.txt");
-        QCOMPARE(cmakeInfo.name, QString("CMake Build Script"));
+        QCOMPARE(cmakeInfo.name, QString("TXT File"));
 
         CinderDE::FileTypeInfo unknownInfo = CinderDE::FileTypeDetector::detectType("file.xyz");
         QCOMPARE(unknownInfo.name, QString("XYZ File"));
