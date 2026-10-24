@@ -2,7 +2,6 @@
 #include "cinderde/language_pack.h"
 #include <QFileInfo>
 #include <QFile>
-#include <QMap>
 
 namespace CinderDE {
 
@@ -25,54 +24,11 @@ FileTypeInfo FileTypeDetector::detectType(const QString &filePath) {
         return info;
     }
 
-    static const QMap<QString, QString> extensionMap = {
-        {"cpp", "C++ Source"},
-        {"cc", "C++ Source"},
-        {"cxx", "C++ Source"},
-        {"c", "C Source"},
-        {"h", "Header File"},
-        {"hpp", "Header File"},
-        {"hxx", "Header File"},
-        {"py", "Python Source"},
-        {"txt", "Plain Text"},
-        {"md", "Markdown Document"},
-        {"markdown", "Markdown Document"},
-        {"json", "JSON File"},
-        {"xml", "XML File"},
-        {"html", "HTML Document"},
-        {"htm", "HTML Document"},
-        {"css", "CSS Stylesheet"},
-        {"js", "JavaScript File"},
-        {"ts", "TypeScript File"},
-        {"java", "Java Source"},
-        {"kt", "Kotlin Source"},
-        {"kts", "Kotlin Script"},
-        {"cmake", "CMake Script"},
-        {"sh", "Shell Script"},
-        {"bash", "Bash Script"},
-        {"yaml", "YAML File"},
-        {"yml", "YAML File"},
-        {"ini", "INI Configuration"},
-        {"conf", "Configuration File"},
-        {"qrc", "Qt Resource File"},
-        {"ui", "Qt Designer UI File"}
-    };
-
-    if (fileInfo.fileName().toLower() == "cmakelists.txt") {
-        info.name = "CMake Build Script";
-        return info;
-    }
-
     LanguageDefinition langDef = LanguageRegistry::instance().definitionForExtension(ext);
     if (langDef.isValid()) {
-        if ((ext == "h" || ext == "hpp" || ext == "hxx") && extensionMap.contains(ext)) {
-            info.name = extensionMap.value(ext);
-        } else {
-            info.name = langDef.name;
-        }
-    } else if (extensionMap.contains(ext)) {
-        info.name = extensionMap.value(ext);
+        info.name = langDef.name;
     } else if (!ext.isEmpty()) {
+        // Without an installed pack, identify only the file extension, not a language.
         info.name = ext.toUpper() + " File";
     } else {
         info.name = "Plain Text";

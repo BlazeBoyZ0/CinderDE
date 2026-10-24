@@ -36,7 +36,6 @@ void LineNumberArea::paintEvent(QPaintEvent *event) {
 // CodeEditor implementation
 CodeEditor::CodeEditor(QWidget *parent)
     : QPlainTextEdit(parent),
-      m_language(Language::None),
       m_completionPopup(nullptr),
       m_autoCompletionTimer(new QTimer(this)),
       m_hoverTimer(new QTimer(this)),
@@ -294,18 +293,6 @@ void CodeEditor::handleSmartEnter() {
                 increaseIndent = true;
             }
         }
-    } else if (m_language == Language::C || m_language == Language::Cpp) {
-        if (trimmedLeft.endsWith('{')) {
-            increaseIndent = true;
-        }
-    } else if (m_language == Language::Python) {
-        if (trimmedLeft.endsWith(':')) {
-            increaseIndent = true;
-        }
-    } else {
-        if (trimmedLeft.endsWith('{') || trimmedLeft.endsWith(':')) {
-            increaseIndent = true;
-        }
     }
 
     int tabWidth = m_languageDef.isValid() ? m_languageDef.indentation.tabSize : 4;
@@ -436,7 +423,7 @@ bool CodeEditor::handleBracketPairing(QKeyEvent *e) {
     }
 
     // 3. Auto unindent closing brace '}' if alone on line
-    if (ch == '}' && ((m_language == Language::C || m_language == Language::Cpp) || (m_languageDef.isValid() && m_languageDef.indentation.autoIndentOnBrace))) {
+    if (ch == '}' && m_languageDef.isValid() && m_languageDef.indentation.autoIndentOnBrace) {
         QString lineText = cursor.block().text();
         int posInBlock = cursor.positionInBlock();
         QString leftText = lineText.left(posInBlock);
@@ -488,12 +475,11 @@ void CodeEditor::toggleComment() {
     int startBlock = document()->findBlock(cursor.selectionStart()).blockNumber();
     int endBlock = document()->findBlock(cursor.selectionEnd()).blockNumber();
 
-    QString commentPrefix = "// ";
-    if (m_languageDef.isValid() && !m_languageDef.comments.linePrefix.isEmpty()) {
-        commentPrefix = m_languageDef.comments.linePrefix + " ";
-    } else if (m_language == Language::Python) {
-        commentPrefix = "# ";
+    // Comment syntax is language-specific; without an installed pack, do nothing.
+    if (!m_languageDef.isValid() || m_languageDef.comments.linePrefix.isEmpty()) {
+        return;
     }
+    const QString commentPrefix = m_languageDef.comments.linePrefix + " ";
 
     // Check if all non-empty lines in selection are already commented
     bool allCommented = true;
@@ -581,7 +567,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             if (m_languageDef.isValid()) {
                 m_completionPopup->updateSuggestions(prefix, m_languageDef);
             } else {
-                m_completionPopup->updateSuggestions(prefix, m_language);
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
             }
         } else if (m_completionPopup) {
             m_completionPopup->hide();
@@ -615,7 +601,7 @@ void CodeEditor::keyPressEvent(QKeyEvent *e) {
             if (m_languageDef.isValid()) {
                 m_completionPopup->updateSuggestions(prefix, m_languageDef);
             } else {
-                m_completionPopup->updateSuggestions(prefix, m_language);
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
             }
         } else {
             m_completionPopup->hide();
@@ -691,7 +677,7 @@ void CodeEditor::triggerCompletion() {
                 if (guard->m_languageDef.isValid()) {
                     guard->m_completionPopup->updateSuggestions(prefix, guard->m_languageDef);
                 } else {
-                    guard->m_completionPopup->updateSuggestions(prefix, guard->m_language);
+                    guard->m_completionPopup->updateSuggestions(prefix, guard->m_languageDef);
                 }
             }
         }, triggerCharacter);
@@ -700,7 +686,7 @@ void CodeEditor::triggerCompletion() {
             if (m_languageDef.isValid()) {
                 m_completionPopup->updateSuggestions(prefix, m_languageDef);
             } else {
-                m_completionPopup->updateSuggestions(prefix, m_language);
+                m_completionPopup->updateSuggestions(prefix, m_languageDef);
             }
         }
     }
@@ -988,25 +974,17 @@ EditorTab::~EditorTab() {
 }
 
 void EditorTab::updateHighlighterLanguage() {
-    LanguageDefinition def = LanguageRegistry::instance().definitionForExtension(m_typeInfo.extension);
+    const LanguageDefinition def =
+        LanguageRegistry::instance().definitionForExtension(m_typeInfo.extension);
+
     if (m_highlighter) {
-        if (def.isValid()) {
-            m_highlighter->setLanguageDefinition(def);
-        } else {
-            Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
-            m_highlighter->setLanguage(lang);
-        }
+        m_highlighter->setLanguageDefinition(def);
     }
+
     if (m_editor) {
-        if (def.isValid()) {
-            m_editor->setLanguageDefinition(def);
-            m_editor->setLanguage(m_highlighter ? m_highlighter->language() : Language::None);
-            if (def.indentation.tabSize > 0) {
-                m_editor->setEditorTabSize(def.indentation.tabSize);
-            }
-        } else {
-            Language lang = SyntaxHighlighter::languageFromExtension(m_typeInfo.extension);
-            m_editor->setLanguage(lang);
+        m_editor->setLanguageDefinition(def);
+        if (def.isValid() && def.indentation.tabSize > 0) {
+            m_editor->setEditorTabSize(def.indentation.tabSize);
         }
     }
 }

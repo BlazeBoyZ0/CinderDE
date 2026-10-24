@@ -5,57 +5,16 @@ namespace CinderDE {
 
 SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
     : QSyntaxHighlighter(parent),
-      m_language(Language::None),
       m_theme(SyntaxTheme::darkTheme())
 {
-}
-
-Language SyntaxHighlighter::languageFromExtension(const QString &extension) {
-    LanguageDefinition def = LanguageRegistry::instance().definitionForExtension(extension);
-    if (def.id == "c") return Language::C;
-    if (def.id == "cpp") return Language::Cpp;
-    if (def.id == "python") return Language::Python;
-
-    QString ext = extension.toLower();
-    if (ext.startsWith('.')) {
-        ext = ext.mid(1);
-    }
-
-    if (ext == "c") {
-        return Language::C;
-    } else if (ext == "cpp" || ext == "cc" || ext == "cxx" || ext == "hpp" || ext == "hxx" || ext == "h") {
-        return Language::Cpp;
-    } else if (ext == "py") {
-        return Language::Python;
-    }
-
-    return Language::None;
 }
 
 LanguageDefinition SyntaxHighlighter::definitionFromExtension(const QString &extension) {
     return LanguageRegistry::instance().definitionForExtension(extension);
 }
 
-void SyntaxHighlighter::setLanguage(Language lang) {
-    m_language = lang;
-    if (lang == Language::C) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("c"));
-    } else if (lang == Language::Cpp) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("cpp"));
-    } else if (lang == Language::Python) {
-        setLanguageDefinition(LanguageRegistry::instance().definitionForId("python"));
-    } else {
-        setLanguageDefinition(LanguageDefinition());
-    }
-}
-
 void SyntaxHighlighter::setLanguageDefinition(const LanguageDefinition &def) {
     m_languageDef = def;
-
-    if (def.id == "c") m_language = Language::C;
-    else if (def.id == "cpp") m_language = Language::Cpp;
-    else if (def.id == "python") m_language = Language::Python;
-    else m_language = Language::None;
 
     rebuildRulesFromDefinition();
     rehighlight();
@@ -91,22 +50,6 @@ void SyntaxHighlighter::rebuildRulesFromDefinition() {
         m_typeRules.append(rule);
     }
 
-    // Preprocessor Directives (C/C++ or languages with preprocessor)
-    if (m_languageDef.id == "c" || m_languageDef.id == "cpp") {
-        HighlightingRule prepRule;
-        prepRule.pattern = QRegularExpression(R"(^\s*#\s*[a-zA-Z_]\w*)");
-        prepRule.format = m_theme.preprocessorFormat;
-        m_rules.append(prepRule);
-    }
-
-    // Decorators (@decorator_name)
-    if (m_languageDef.id == "python") {
-        HighlightingRule decRule;
-        decRule.pattern = QRegularExpression(R"(@[a-zA-Z_]\w*)");
-        decRule.format = m_theme.decoratorFormat;
-        m_rules.append(decRule);
-    }
-
     // Functions
     HighlightingRule funcRule;
     funcRule.pattern = QRegularExpression(R"(\b[a-zA-Z_]\w*(?=\s*\())");
@@ -115,21 +58,13 @@ void SyntaxHighlighter::rebuildRulesFromDefinition() {
 
     // Numbers
     HighlightingRule numRule;
-    if (m_languageDef.id == "python") {
-        numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)\b)");
-    } else {
-        numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)[uUlLfF]*\b)");
-    }
+    numRule.pattern = QRegularExpression(R"(\b(0[xX][0-9a-fA-F]+|0[bB][01]+|0[oO][0-7]+|[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?)[uUlLfF]*\b)");
     numRule.format = m_theme.numberFormat;
     m_rules.append(numRule);
 
     // Operators
     HighlightingRule opRule;
-    if (m_languageDef.id == "python") {
-        opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\:]+)");
-    } else {
-        opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\?]+)");
-    }
+    opRule.pattern = QRegularExpression(R"([\+\-\*\/\%=\&\!\|\^\<\>\~\?:]+)");
     opRule.format = m_theme.operatorFormat;
     m_rules.append(opRule);
 }
@@ -140,13 +75,7 @@ void SyntaxHighlighter::highlightBlock(const QString &text) {
         return;
     }
 
-    if (m_languageDef.id == "c" || m_languageDef.id == "cpp") {
-        highlightCLikeBlock(text);
-    } else if (m_languageDef.id == "python") {
-        highlightPythonBlock(text);
-    } else {
-        highlightGenericBlock(text);
-    }
+    highlightGenericBlock(text);
 }
 
 void SyntaxHighlighter::applyMaskedRules(const QString &text, const QVector<HighlightingRule> &rules, const QVector<bool> &isMasked) {
@@ -171,225 +100,6 @@ void SyntaxHighlighter::applyMaskedRules(const QString &text, const QVector<High
     }
 }
 
-void SyntaxHighlighter::highlightCLikeBlock(const QString &text) {
-    int length = text.length();
-    QVector<bool> isMasked(length, false);
-    struct FormatSpan {
-        int start;
-        int length;
-        QTextCharFormat format;
-    };
-    QVector<FormatSpan> stringCommentSpans;
-
-    int state = previousBlockState();
-    if (state < 0) state = 0;
-
-    int i = 0;
-
-    while (i < length) {
-        if (state == 1) { // Inside multiline comment
-            int endIdx = text.indexOf("*/", i);
-            if (endIdx != -1) {
-                int commentLen = (endIdx + 2) - i;
-                for (int k = i; k < endIdx + 2; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, commentLen, m_theme.commentFormat});
-                i = endIdx + 2;
-                state = 0;
-            } else {
-                for (int k = i; k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, length - i, m_theme.commentFormat});
-                i = length;
-            }
-        } else { // Normal mode
-            QChar ch = text.at(i);
-
-            // Single line comment //
-            if (ch == '/' && i + 1 < length && text.at(i + 1) == '/') {
-                for (int k = i; k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, length - i, m_theme.commentFormat});
-                break;
-            }
-
-            // Start of block comment /*
-            if (ch == '/' && i + 1 < length && text.at(i + 1) == '*') {
-                state = 1;
-                int endIdx = text.indexOf("*/", i + 2);
-                if (endIdx != -1) {
-                    int commentLen = (endIdx + 2) - i;
-                    for (int k = i; k < endIdx + 2; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, commentLen, m_theme.commentFormat});
-                    i = endIdx + 2;
-                    state = 0;
-                } else {
-                    for (int k = i; k < length; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, length - i, m_theme.commentFormat});
-                    i = length;
-                }
-                continue;
-            }
-
-            // String or Char literal ('...' or "...")
-            if (ch == '"' || ch == '\'') {
-                QChar quote = ch;
-                int start = i;
-                i++;
-                while (i < length) {
-                    if (text.at(i) == '\\') {
-                        i += 2; // skip escaped character
-                        continue;
-                    }
-                    if (text.at(i) == quote) {
-                        i++; // consume closing quote
-                        break;
-                    }
-                    i++;
-                }
-                for (int k = start; k < i && k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({start, i - start, m_theme.stringFormat});
-                continue;
-            }
-
-            i++;
-        }
-    }
-
-    setCurrentBlockState(state);
-
-    applyMaskedRules(text, m_rules, isMasked);
-    applyMaskedRules(text, m_typeRules, isMasked);
-
-    for (const auto &span : stringCommentSpans) {
-        setFormat(span.start, span.length, span.format);
-    }
-}
-
-void SyntaxHighlighter::highlightPythonBlock(const QString &text) {
-    int length = text.length();
-    QVector<bool> isMasked(length, false);
-    struct FormatSpan {
-        int start;
-        int length;
-        QTextCharFormat format;
-    };
-    QVector<FormatSpan> stringCommentSpans;
-
-    // States: 0 = normal, 1 = inside """...""", 2 = inside '''...'''
-    int state = previousBlockState();
-    if (state < 0) state = 0;
-
-    int i = 0;
-
-    while (i < length) {
-        if (state == 1) { // Inside """
-            int endIdx = text.indexOf("\"\"\"", i);
-            if (endIdx != -1) {
-                int strLen = (endIdx + 3) - i;
-                for (int k = i; k < endIdx + 3; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, strLen, m_theme.stringFormat});
-                i = endIdx + 3;
-                state = 0;
-            } else {
-                for (int k = i; k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, length - i, m_theme.stringFormat});
-                i = length;
-            }
-        } else if (state == 2) { // Inside '''
-            int endIdx = text.indexOf("'''", i);
-            if (endIdx != -1) {
-                int strLen = (endIdx + 3) - i;
-                for (int k = i; k < endIdx + 3; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, strLen, m_theme.stringFormat});
-                i = endIdx + 3;
-                state = 0;
-            } else {
-                for (int k = i; k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, length - i, m_theme.stringFormat});
-                i = length;
-            }
-        } else { // Normal mode
-            QChar ch = text.at(i);
-
-            // Single line comment #
-            if (ch == '#') {
-                for (int k = i; k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({i, length - i, m_theme.commentFormat});
-                break;
-            }
-
-            // Triple quote """
-            if (i + 2 < length && text.mid(i, 3) == "\"\"\"") {
-                state = 1;
-                int endIdx = text.indexOf("\"\"\"", i + 3);
-                if (endIdx != -1) {
-                    int strLen = (endIdx + 3) - i;
-                    for (int k = i; k < endIdx + 3; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, strLen, m_theme.stringFormat});
-                    i = endIdx + 3;
-                    state = 0;
-                } else {
-                    for (int k = i; k < length; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, length - i, m_theme.stringFormat});
-                    i = length;
-                }
-                continue;
-            }
-
-            // Triple quote '''
-            if (i + 2 < length && text.mid(i, 3) == "'''") {
-                state = 2;
-                int endIdx = text.indexOf("'''", i + 3);
-                if (endIdx != -1) {
-                    int strLen = (endIdx + 3) - i;
-                    for (int k = i; k < endIdx + 3; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, strLen, m_theme.stringFormat});
-                    i = endIdx + 3;
-                    state = 0;
-                } else {
-                    for (int k = i; k < length; ++k) isMasked[k] = true;
-                    stringCommentSpans.append({i, length - i, m_theme.stringFormat});
-                    i = length;
-                }
-                continue;
-            }
-
-            // Single quote string ("..." or '...') - optional f/r/b prefix
-            if (ch == '"' || ch == '\'') {
-                int start = i;
-                if (i > 0 && (text.at(i-1) == 'f' || text.at(i-1) == 'r' || text.at(i-1) == 'b' || text.at(i-1) == 'u' ||
-                              text.at(i-1) == 'F' || text.at(i-1) == 'R' || text.at(i-1) == 'B')) {
-                    start = i - 1;
-                }
-                QChar quote = ch;
-                i++;
-                while (i < length) {
-                    if (text.at(i) == '\\') {
-                        i += 2; // skip escaped character
-                        continue;
-                    }
-                    if (text.at(i) == quote) {
-                        i++; // consume closing quote
-                        break;
-                    }
-                    i++;
-                }
-                for (int k = start; k < i && k < length; ++k) isMasked[k] = true;
-                stringCommentSpans.append({start, i - start, m_theme.stringFormat});
-                continue;
-            }
-
-            i++;
-        }
-    }
-
-    setCurrentBlockState(state);
-
-    applyMaskedRules(text, m_rules, isMasked);
-    applyMaskedRules(text, m_typeRules, isMasked);
-
-    for (const auto &span : stringCommentSpans) {
-        setFormat(span.start, span.length, span.format);
-    }
-}
 
 void SyntaxHighlighter::highlightGenericBlock(const QString &text) {
     int length = text.length();
