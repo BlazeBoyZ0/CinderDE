@@ -36,7 +36,6 @@ public:
 
     static Language languageFromExtension(const QString &extension);
     static LanguageDefinition definitionFromExtension(const QString &extension);
-    static LanguageDefinition fallbackDefinitionForLanguage(Language lang);
 
 protected:
     void highlightBlock(const QString &text) override;
@@ -50,8 +49,6 @@ private:
     QVector<HighlightingRule> m_typeRules;
 
     void rebuildRulesFromDefinition();
-    void highlightCLikeBlock(const QString &text);
-    void highlightPythonBlock(const QString &text);
     void highlightGenericBlock(const QString &text);
     void applyMaskedRules(const QString &text, const QVector<HighlightingRule> &rules, const QVector<bool> &isMasked);
 };

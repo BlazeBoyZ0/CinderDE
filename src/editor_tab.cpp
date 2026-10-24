@@ -294,14 +294,6 @@ void CodeEditor::handleSmartEnter() {
                 increaseIndent = true;
             }
         }
-    } else if (m_language == Language::C || m_language == Language::Cpp) {
-        if (trimmedLeft.endsWith('{')) {
-            increaseIndent = true;
-        }
-    } else if (m_language == Language::Python) {
-        if (trimmedLeft.endsWith(':')) {
-            increaseIndent = true;
-        }
     } else {
         if (trimmedLeft.endsWith('{') || trimmedLeft.endsWith(':')) {
             increaseIndent = true;
@@ -436,7 +428,7 @@ bool CodeEditor::handleBracketPairing(QKeyEvent *e) {
     }
 
     // 3. Auto unindent closing brace '}' if alone on line
-    if (ch == '}' && ((m_language == Language::C || m_language == Language::Cpp) || (m_languageDef.isValid() && m_languageDef.indentation.autoIndentOnBrace))) {
+    if (ch == '}' && m_languageDef.isValid() && m_languageDef.indentation.autoIndentOnBrace) {
         QString lineText = cursor.block().text();
         int posInBlock = cursor.positionInBlock();
         QString leftText = lineText.left(posInBlock);
@@ -491,8 +483,6 @@ void CodeEditor::toggleComment() {
     QString commentPrefix = "// ";
     if (m_languageDef.isValid() && !m_languageDef.comments.linePrefix.isEmpty()) {
         commentPrefix = m_languageDef.comments.linePrefix + " ";
-    } else if (m_language == Language::Python) {
-        commentPrefix = "# ";
     }
 
     // Check if all non-empty lines in selection are already commented

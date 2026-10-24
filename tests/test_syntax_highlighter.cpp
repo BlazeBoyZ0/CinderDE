@@ -1,26 +1,19 @@
 #include <QtTest>
 #include <QTextDocument>
 #include <QTextBlock>
+#include <QJsonDocument>
 #include "cinderde/syntax_highlighter.h"
 #include "cinderde/editor_tab.h"
+#include "cinderde/language_pack.h"
 
 class TestSyntaxHighlighter : public QObject {
     Q_OBJECT
 
 private slots:
-    void testLanguageFromExtension() {
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("c"), CinderDE::Language::C);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension(".c"), CinderDE::Language::C);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("cpp"), CinderDE::Language::Cpp);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("cc"), CinderDE::Language::Cpp);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("hpp"), CinderDE::Language::Cpp);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("h"), CinderDE::Language::Cpp);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("py"), CinderDE::Language::Python);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("txt"), CinderDE::Language::None);
-        QCOMPARE(CinderDE::SyntaxHighlighter::languageFromExtension("unknown"), CinderDE::Language::None);
-    }
+    void testNoHighlightingWhenPackNotInstalled() {
+        // Clear any registered definitions to simulate uninstalled packs
+        CinderDE::LanguageRegistry::instance().clear();
 
-    void testCHighlighting() {
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
         highlighter.setLanguage(CinderDE::Language::C);
@@ -28,21 +21,44 @@ private slots:
         doc.setPlainText("#include <stdio.h>\nint main() {\n    // comment\n    return 42;\n}");
         highlighter.rehighlight();
 
-        QTextBlock b0 = doc.findBlockByNumber(0); // #include <stdio.h>
-        QTextBlock b1 = doc.findBlockByNumber(1); // int main() {
-        QTextBlock b2 = doc.findBlockByNumber(2); // // comment
-        QTextBlock b3 = doc.findBlockByNumber(3); // return 42;
+        QTextBlock b0 = doc.findBlockByNumber(0);
+        QTextBlock b1 = doc.findBlockByNumber(1);
 
-        QVERIFY(b0.layout()->formats().count() > 0);
-        QVERIFY(b1.layout()->formats().count() > 0);
-        QVERIFY(b2.layout()->formats().count() > 0);
-        QVERIFY(b3.layout()->formats().count() > 0);
+        // When no language pack is installed, CDE must not invent language-specific support
+        QCOMPARE(b0.layout()->formats().count(), 0);
+        QCOMPARE(b1.layout()->formats().count(), 0);
+
+        CinderDE::EditorTab tab;
+        tab.setFilePath("script.py");
+        QVERIFY(!tab.highlighter()->languageDefinition().isValid());
     }
 
-    void testCppAndMultilineCommentHighlighting() {
+    void testHighlightingWithInstalledLanguagePack() {
+        CinderDE::LanguageRegistry::instance().clear();
+
+        // Register a C++ language pack
+        QString cppPackJson = R"({
+            "id": "cpp",
+            "name": "C++",
+            "extensions": ["cpp", "hpp", "h"],
+            "keywords": ["class", "int", "return"],
+            "types": ["MyClass"],
+            "comments": {
+                "line": "//",
+                "block_start": "/*",
+                "block_end": "*/"
+            }
+        })";
+
+        QJsonDocument docJson = QJsonDocument::fromJson(cppPackJson.toUtf8());
+        QVERIFY(docJson.isObject());
+        QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(docJson.object()));
+
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
-        highlighter.setLanguage(CinderDE::Language::Cpp);
+        CinderDE::LanguageDefinition cppDef = CinderDE::LanguageRegistry::instance().definitionForId("cpp");
+        QVERIFY(cppDef.isValid());
+        highlighter.setLanguageDefinition(cppDef);
 
         doc.setPlainText("/* start multiline\n   middle line\n   end multiline */\nclass MyClass {};");
         highlighter.rehighlight();
@@ -59,10 +75,31 @@ private slots:
         QVERIFY(b3.layout()->formats().count() > 0); // 'class' keyword format
     }
 
-    void testPythonAndTripleQuotesHighlighting() {
+    void testPythonHighlightingWithInstalledPack() {
+        CinderDE::LanguageRegistry::instance().clear();
+
+        QString pythonPackJson = R"({
+            "id": "python",
+            "name": "Python",
+            "extensions": ["py"],
+            "keywords": ["def", "return"],
+            "builtins": ["True"],
+            "comments": {
+                "line": "#",
+                "block_start": "\"\"\"",
+                "block_end": "\"\"\""
+            }
+        })";
+
+        QJsonDocument docJson = QJsonDocument::fromJson(pythonPackJson.toUtf8());
+        QVERIFY(docJson.isObject());
+        QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(docJson.object()));
+
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
-        highlighter.setLanguage(CinderDE::Language::Python);
+        CinderDE::LanguageDefinition pyDef = CinderDE::LanguageRegistry::instance().definitionForId("python");
+        QVERIFY(pyDef.isValid());
+        highlighter.setLanguageDefinition(pyDef);
 
         doc.setPlainText("def foo():\n    \"\"\" docstring line 1\n        docstring line 2 \"\"\"\n    return True");
         highlighter.rehighlight();
@@ -80,9 +117,21 @@ private slots:
     }
 
     void testEscapedQuotesAndCommentsInStrings() {
+        CinderDE::LanguageRegistry::instance().clear();
+
+        QString cppPackJson = R"({
+            "id": "cpp",
+            "name": "C++",
+            "extensions": ["cpp"],
+            "keywords": ["const", "char"]
+        })";
+
+        QJsonDocument docJson = QJsonDocument::fromJson(cppPackJson.toUtf8());
+        QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(docJson.object()));
+
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
-        highlighter.setLanguage(CinderDE::Language::Cpp);
+        highlighter.setLanguageDefinition(CinderDE::LanguageRegistry::instance().definitionForId("cpp"));
 
         doc.setPlainText("const char *str = \"Hello \\\"world\\\" // not a comment\";");
         highlighter.rehighlight();
@@ -92,9 +141,11 @@ private slots:
     }
 
     void testUnknownExtensionNoHighlighting() {
+        CinderDE::LanguageRegistry::instance().clear();
+
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
-        highlighter.setLanguage(CinderDE::Language::None);
+        highlighter.setLanguageDefinition(CinderDE::LanguageDefinition());
 
         doc.setPlainText("int main() { return 0; }");
         highlighter.rehighlight();
@@ -104,14 +155,25 @@ private slots:
     }
 
     void testTabLanguageReevaluationOnSaveAs() {
+        CinderDE::LanguageRegistry::instance().clear();
+
+        QString pythonPackJson = R"({
+            "id": "python",
+            "name": "Python",
+            "extensions": ["py"]
+        })";
+        QJsonDocument docJson = QJsonDocument::fromJson(pythonPackJson.toUtf8());
+        QVERIFY(CinderDE::LanguageRegistry::instance().loadFromJson(docJson.object()));
+
         CinderDE::EditorTab tab;
-        QCOMPARE(tab.highlighter()->language(), CinderDE::Language::None);
+        QVERIFY(!tab.highlighter()->languageDefinition().isValid());
 
         tab.setFilePath("script.py");
-        QCOMPARE(tab.highlighter()->language(), CinderDE::Language::Python);
+        QVERIFY(tab.highlighter()->languageDefinition().isValid());
+        QCOMPARE(tab.highlighter()->languageDefinition().id, QString("python"));
 
-        tab.setFilePath("main.cpp");
-        QCOMPARE(tab.highlighter()->language(), CinderDE::Language::Cpp);
+        tab.setFilePath("main.unknown");
+        QVERIFY(!tab.highlighter()->languageDefinition().isValid());
     }
 };
 
