@@ -16,7 +16,7 @@ private slots:
 
         QTextDocument doc;
         CinderDE::SyntaxHighlighter highlighter(&doc);
-        highlighter.setLanguage(CinderDE::Language::C);
+        highlighter.setLanguageDefinition(CinderDE::LanguageDefinition());
 
         doc.setPlainText("#include <stdio.h>\nint main() {\n    // comment\n    return 42;\n}");
         highlighter.rehighlight();
