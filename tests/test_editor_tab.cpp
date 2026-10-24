@@ -114,6 +114,7 @@ private slots:
         tab.setFilePath("test.cpp");
 
         auto *editor = tab.editor();
+        editor->setLanguageDefinition(testCppDefinition());
         editor->setPlainText("int a = 1;\nint b = 2;");
 
         QTextCursor cursor = editor->textCursor();
