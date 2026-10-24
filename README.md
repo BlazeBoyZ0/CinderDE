@@ -25,6 +25,6 @@ CinderDE may suit developers who want a straightforward editor and prefer choosi
 - **Language:** C++17
 - **GUI framework:** Qt 6 Widgets
 - **Build system:** CMake
-- **Version:** 1.0.0 (finalization in progress)
+- **Version:** 1.0.0
 
 For detailed instructions and caveats, start with the guides above.
