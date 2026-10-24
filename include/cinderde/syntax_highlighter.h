@@ -10,13 +10,6 @@
 
 namespace CinderDE {
 
-enum class Language {
-    None,
-    C,
-    Cpp,
-    Python
-};
-
 struct HighlightingRule {
     QRegularExpression pattern;
     QTextCharFormat format;
@@ -28,20 +21,16 @@ class SyntaxHighlighter : public QSyntaxHighlighter {
 public:
     explicit SyntaxHighlighter(QTextDocument *parent = nullptr);
 
-    void setLanguage(Language lang);
     void setLanguageDefinition(const LanguageDefinition &def);
 
-    Language language() const { return m_language; }
     LanguageDefinition languageDefinition() const { return m_languageDef; }
 
-    static Language languageFromExtension(const QString &extension);
     static LanguageDefinition definitionFromExtension(const QString &extension);
 
 protected:
     void highlightBlock(const QString &text) override;
 
 private:
-    Language m_language;
     LanguageDefinition m_languageDef;
     SyntaxTheme m_theme;
 
