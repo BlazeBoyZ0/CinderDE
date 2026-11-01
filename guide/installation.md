@@ -1,5 +1,7 @@
 # Installation and Build
 
+You can directly install .deb file from releases(debian/ubuntu).
+
 This guide describes building CinderDE from source on Linux.
 
 ## Requirements
